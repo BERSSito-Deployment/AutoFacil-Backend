@@ -1,9 +1,4 @@
-"""Punto de entrada de la aplicacion FastAPI de AutoFacil.
-
-Configura la aplicacion, el middleware CORS para el desarrollo local, registra
-los enrutadores, organiza la documentacion Swagger y crea las tablas y los
-datos semilla al iniciar.
-"""
+"""Punto de entrada de la aplicacion FastAPI."""
 
 from contextlib import asynccontextmanager
 
@@ -13,12 +8,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import obtener_configuracion
 from app.database import FabricaSesion, crear_tablas
 from app.rutas import (
-    auditoria,
     auth,
     clientes,
-    indicadores,
     perfil,
-    publico,
     simulaciones,
     tipo_cambio,
     vehiculos,
@@ -26,56 +18,87 @@ from app.rutas import (
 
 configuracion = obtener_configuracion()
 
-# Metadatos de los grupos de endpoints mostrados en Swagger.
+# Grupos de endpoints en Swagger.
 ETIQUETAS_OPENAPI = [
     {
         "name": "Autenticacion",
-        "description": "Registro e inicio de sesion. El login y el registro devuelven un token "
-        "JWT que debe enviarse como Bearer.",
+        "description": (
+            "Registro e inicio de sesion del asesor. El login (`/auth/login-json`) y el "
+            "registro (`/auth/registro`) devuelven un token JWT de acceso que debe enviarse "
+            "como `Authorization: Bearer <token>` en el resto de endpoints."
+        ),
     },
-    {"name": "Perfil", "description": "Consulta y actualizacion del perfil del propio usuario."},
-    {"name": "Clientes", "description": "Registro y gestion de los clientes del asesor."},
-    {"name": "Vehiculos", "description": "Catalogo de vehiculos del asesor."},
+    {
+        "name": "Perfil",
+        "description": (
+            "Consulta y actualizacion del perfil del propio usuario (nombre, correo, "
+            "usuario y contrasena). Cambiar el usuario no invalida la sesion."
+        ),
+    },
+    {
+        "name": "Clientes",
+        "description": (
+            "Gestion de la cartera de clientes del asesor: alta, busqueda, edicion y baja "
+            "logica. Cada asesor solo ve y opera sus propios clientes."
+        ),
+    },
+    {
+        "name": "Vehiculos",
+        "description": (
+            "Catalogo de vehiculos del asesor: alta, busqueda, edicion y baja logica. El "
+            "vehiculo solo maneja el indicador `activo` (no tiene estado comercial)."
+        ),
+    },
     {
         "name": "Simulaciones",
-        "description": "Calculo, guardado, edicion, recalculo, cambio de estado y eliminacion "
-        "de las simulaciones de credito vehicular de la entidad.",
-    },
-    {
-        "name": "Cronograma de pagos",
-        "description": "Consulta del cronograma de pagos detallado de una simulacion.",
-    },
-    {
-        "name": "Indicadores financieros",
-        "description": "Indicadores agregados para el panel principal (totales, TCEA promedio).",
+        "description": (
+            "Nucleo de AutoFacil: previsualizacion (`/calcular`), guardado, listado con "
+            "filtros, detalle (con el cronograma de la cuota regular y del cuoton), edicion "
+            "con recalculo, recalculo y archivado (baja logica) de las propuestas de credito "
+            "vehicular Compra Inteligente."
+        ),
     },
     {
         "name": "Tipo de cambio",
-        "description": "Consulta del tipo de cambio referencial en tiempo real desde una API publica.",
-    },
-    {
-        "name": "Auditoria",
-        "description": "Registro de creacion, edicion y recalculo de las operaciones del usuario.",
-    },
-    {
-        "name": "Vista del cliente",
-        "description": "Consulta publica de solo lectura de una simulacion mediante su enlace compartible.",
+        "description": (
+            "Consulta del tipo de cambio referencial USD/PEN en tiempo real desde una API "
+            "publica (con respaldo local). Es informativo y no altera el calculo financiero."
+        ),
     },
 ]
 
 DESCRIPCION_API = """
-API del sistema **AutoFacil** para la simulacion y gestion de credito vehicular
-para una entidad financiera en Peru.
+API del sistema **AutoFacil**: simulacion y gestion de credito vehicular para una
+entidad financiera en Peru. Cada asesor trabaja de forma aislada sobre su propia
+cartera de clientes, su catalogo de vehiculos y sus simulaciones.
 
-Implementa el metodo frances vencido ordinario con meses comerciales de 30 dias.
-Los calculos financieros usan aritmetica decimal de alta precision y no redondean
-valores intermedios.
+### Producto
 
-Autenticacion: use el endpoint de login para obtener un token JWT (tipo
-"acceso") y pulse el boton **Authorize** para autorizar las llamadas a los
-endpoints protegidos.
+Producto **Compra Inteligente** (estilo Interbank, Peru): metodo frances vencido
+ordinario con meses comerciales de 30 dias (NDxA = 360). El precio se reparte en
+cuota inicial, cuotas mensuales y un **cuoton** (cuota final) que se difiere y se
+paga integro en el periodo **N+1**. El **plan** define el numero de cuotas y el
+cuoton: Plan 24 -> 24 cuotas y 50%; Plan 36 -> 36 cuotas y 40%. La tasa es fija
+(efectiva o nominal; si es nominal la capitalizacion es diaria o mensual). Los
+calculos usan aritmetica decimal de alta precision y no redondean valores
+intermedios.
 
-Las tasas y porcentajes se expresan en formato decimal (0.18 = 18%).
+### Autenticacion
+
+1. Cree una cuenta en `POST /auth/registro` o use una cuenta de prueba (`demo` /
+   `Demo1234`).
+2. Obtenga el token con `POST /auth/login-json` (o el formulario `POST /auth/login`).
+3. Pulse **Authorize** arriba a la derecha y pegue el token para autorizar las
+   llamadas a los endpoints protegidos.
+
+### Convenciones
+
+* Las tasas y porcentajes viajan en **formato decimal**: `0.18` = 18%, `0.20` =
+  20% de cuota inicial.
+* Los importes monetarios se devuelven como numeros (`float`); el frontend aplica
+  el formato de moneda.
+* La baja de clientes, vehiculos y simulaciones es **logica** (no hay borrado
+  fisico): `DELETE` desactiva/archiva conservando el historial.
 """
 
 
@@ -116,10 +139,7 @@ aplicacion.include_router(perfil.enrutador)
 aplicacion.include_router(clientes.enrutador)
 aplicacion.include_router(vehiculos.enrutador)
 aplicacion.include_router(simulaciones.enrutador)
-aplicacion.include_router(indicadores.enrutador)
 aplicacion.include_router(tipo_cambio.enrutador)
-aplicacion.include_router(auditoria.enrutador)
-aplicacion.include_router(publico.enrutador)
 
 
 @aplicacion.get("/", tags=["Estado"], summary="Estado del servicio")
@@ -133,6 +153,5 @@ def estado_servicio() -> dict:
     }
 
 
-# Alias `app`: punto de entrada ASGI estandar esperado por uvicorn al ejecutar
-# `uvicorn app.main:app`. Apunta a la misma instancia que `aplicacion`.
+# Alias ASGI estandar para uvicorn (app.main:app).
 app = aplicacion
