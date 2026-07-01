@@ -121,6 +121,7 @@ def _solicitud_desde_modelo(simulacion: Simulacion) -> SimulacionCalcularRequest
         tipo_cambio_referencial=simulacion.tipo_cambio_referencial,
         plan=simulacion.plan,
         porcentaje_cuota_inicial=simulacion.porcentaje_cuota_inicial,
+        porcentaje_cuota_final=simulacion.porcentaje_cuota_final,
         tipo_tasa=simulacion.tipo_tasa,
         valor_tasa=simulacion.tasa_ingresada,
         capitalizacion=simulacion.capitalizacion,

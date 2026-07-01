@@ -60,6 +60,7 @@ def construir_entrada(
         tipo_tasa=solicitud.tipo_tasa,
         valor_tasa=solicitud.valor_tasa,
         capitalizacion=solicitud.capitalizacion,
+        porcentaje_cuota_final=solicitud.porcentaje_cuota_final,
         meses_gracia_total=solicitud.meses_gracia_total,
         meses_gracia_parcial=solicitud.meses_gracia_parcial,
         costo_notarial=CostoInicial(

@@ -20,9 +20,12 @@ class ParametrosFinancieros(BaseModel):
 
     moneda: Moneda = Moneda.SOLES
     tipo_cambio_referencial: Decimal | None = Field(default=None, ge=0)
-    # El plan determina el numero de cuotas (N) y la cuota final (pCF).
+    # El plan fija el numero de cuotas (Plan 24 -> 24, Plan 36 -> 36).
     plan: Plan = Plan.PLAN_36
     porcentaje_cuota_inicial: Decimal = Field(default=Decimal("0.20"), ge=0, le=1)
+    # Cuota final (cuoton). Si no se envia, se usa el valor por defecto del plan
+    # (40% en Plan 36, 50% en Plan 24); el usuario puede cambiarlo.
+    porcentaje_cuota_final: Decimal | None = Field(default=None, ge=0, lt=1)
     tipo_tasa: TipoTasa = TipoTasa.NOMINAL
     valor_tasa: Decimal = Field(..., ge=0, description="Tasa en formato decimal (0.15 = 15%)")
     # Obligatoria solo cuando la tasa es nominal (TNA): diaria o mensual.
@@ -55,7 +58,7 @@ class ParametrosFinancieros(BaseModel):
 
     @model_validator(mode="after")
     def validar_reglas(self) -> "ParametrosFinancieros":
-        """Valida la coherencia de la tasa nominal y de los periodos de gracia."""
+        """Valida la tasa nominal, los periodos de gracia y las cuotas inicial/final."""
 
         if self.tipo_tasa == TipoTasa.NOMINAL and self.capitalizacion is None:
             raise ValueError("La capitalizacion es obligatoria cuando la tasa es nominal.")

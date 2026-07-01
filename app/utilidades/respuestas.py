@@ -29,9 +29,3 @@ def error_autenticacion(detalle: str) -> HTTPException:
         detail=detalle,
         headers={"WWW-Authenticate": "Bearer"},
     )
-
-
-def error_permiso(detalle: str) -> HTTPException:
-    """Construye una excepcion HTTP 403 para fallos de autorizacion."""
-
-    return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detalle)

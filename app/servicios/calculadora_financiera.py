@@ -99,7 +99,11 @@ class ResultadoCronograma:
 def calcular_cuota_francesa(
     saldo_base: Decimal, tasa_periodica: Decimal, numero_periodos: int
 ) -> Decimal:
-    """Cuota francesa constante que amortiza el saldo a cero en n periodos."""
+    """Calcula la cuota fija (misma cantidad cada mes) que, pagada n veces, deja el saldo en cero.
+
+    Es el "metodo frances": todas las cuotas mensuales valen lo mismo; al inicio
+    la cuota es casi todo interes y con el tiempo pasa a ser casi todo capital.
+    """
 
     saldo_base = a_decimal(saldo_base)
     tasa_periodica = a_decimal(tasa_periodica)
@@ -192,13 +196,14 @@ def generar_cronograma(parametros: ParametrosCronograma) -> ResultadoCronograma:
                 saldo_final = saldo
                 tipo_periodo = TipoPeriodo.GRACIA_PARCIAL
             else:
-                # Cuota normal: la misma cantidad cada mes (metodo frances). Se
-                # recalcula con lo que falta para que el saldo llegue justo a cero.
+                # Cuota fija: la misma cantidad cada mes hasta el final, calculada
+                # para que, pagandola en los meses que faltan, el saldo llegue a cero.
                 periodos_restantes = n - nc + 1
                 cuota = calcular_cuota_francesa(
                     saldo, tasa_con_desgravamen, periodos_restantes
                 )
-                # Lo que no es interes ni seguro baja la deuda (amortizacion).
+                # Amortizacion: la parte de la cuota que baja la deuda (lo que queda
+                # despues de cubrir el interes y el seguro de ese mes).
                 amortizacion = cuota - interes - seguro_desgravamen
                 saldo_final = saldo - amortizacion
                 tipo_periodo = TipoPeriodo.CUOTA_ORDINARIA

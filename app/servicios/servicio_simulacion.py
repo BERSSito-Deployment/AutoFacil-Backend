@@ -43,6 +43,8 @@ class EntradaSimulacion:
     tipo_tasa: TipoTasa
     valor_tasa: Decimal
     capitalizacion: Capitalizacion | None
+    # Cuota final (cuoton). Si es None se usa el valor por defecto del plan.
+    porcentaje_cuota_final: Decimal | None = None
     # Gracia al inicio: meses de gracia total y, a continuacion, de gracia parcial.
     meses_gracia_total: int = 0
     meses_gracia_parcial: int = 0
@@ -175,7 +177,19 @@ def calcular_simulacion(entrada: EntradaSimulacion) -> ResultadoSimulacion:
     porcentaje_inicial = a_decimal(entrada.porcentaje_cuota_inicial)
     plan = entrada.plan
     numero_cuotas = plan.numero_cuotas
-    porcentaje_final = a_decimal(plan.porcentaje_cuota_final)
+    # La cuota final la puede fijar el usuario; si no, se usa el default del plan.
+    porcentaje_final = a_decimal(
+        entrada.porcentaje_cuota_final
+        if entrada.porcentaje_cuota_final is not None
+        else plan.porcentaje_cuota_final
+    )
+
+    # La cuota inicial y la final no pueden cubrir todo el precio: algo debe quedar
+    # para repartir en las cuotas mensuales.
+    if porcentaje_inicial + porcentaje_final >= UNO:
+        raise ValueError(
+            "La cuota inicial y la cuota final no pueden sumar el 100% del precio o mas."
+        )
 
     cuota_inicial = precio * porcentaje_inicial   # lo que se adelanta al inicio
     cuota_final = precio * porcentaje_final        # el cuoton (pago grande del final)
@@ -220,15 +234,21 @@ def calcular_simulacion(entrada: EntradaSimulacion) -> ResultadoSimulacion:
     flujos = [monto_prestamo]
     flujos.extend(fila.flujo for fila in cronograma.filas)
 
+    # COK: la rentabilidad que la persona podria ganar poniendo su dinero en otro
+    # lado. Se usa para traer los pagos futuros a valor de hoy (el VAN).
     cok_anual = a_decimal(entrada.cok_anual)
     cok_mensual = servicio_tasas.anual_a_mensual_compuesta(cok_anual)
+    # VAN: compara lo que recibe hoy con lo que paga despues, traido a valor de hoy
+    # usando el COK. Ayuda a ver si conviene financiarse frente a otra alternativa.
     van = servicio_van_tir.calcular_van(flujos, cok_mensual)
 
+    # TIR: la tasa mensual real de la operacion (la que hace que el VAN sea cero).
     tir_mensual = servicio_van_tir.calcular_tir(flujos)
     tir_anual = (
         potencia(UNO + tir_mensual, MESES_ANIO) - UNO if tir_mensual is not None else None
     )
-    # TCEA = costo real anual del credito (la TIR mensual llevada a un ano).
+    # TCEA: el costo real anual del credito. Resume en una sola tasa TODO lo que se
+    # paga (intereses + seguros + cargos), asi se puede comparar entre creditos.
     _, tcea = calcular_tcea(flujos)
 
     return ResultadoSimulacion(
