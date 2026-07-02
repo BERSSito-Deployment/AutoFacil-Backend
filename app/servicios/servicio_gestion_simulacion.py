@@ -56,6 +56,8 @@ def construir_entrada(
         moneda=solicitud.moneda,
         precio_vehiculo=precio,
         plan=solicitud.plan,
+        numero_cuotas=solicitud.numero_cuotas,
+        dias_anio=solicitud.dias_anio,
         porcentaje_cuota_inicial=solicitud.porcentaje_cuota_inicial,
         tipo_tasa=solicitud.tipo_tasa,
         valor_tasa=solicitud.valor_tasa,
@@ -123,6 +125,7 @@ def aplicar_resultado_a_modelo(
     simulacion.tipo_tasa = resultado.tipo_tasa
     simulacion.tasa_ingresada = redondear_tasa(resultado.tasa_ingresada)
     simulacion.capitalizacion = resultado.capitalizacion
+    simulacion.dias_anio = resultado.dias_anio
     simulacion.meses_gracia_total = resultado.meses_gracia_total
     simulacion.meses_gracia_parcial = resultado.meses_gracia_parcial
     simulacion.costo_notarial = redondear_moneda(solicitud.costo_notarial)
@@ -144,7 +147,6 @@ def aplicar_resultado_a_modelo(
 
     # --- Resultados derivados ---
     simulacion.numero_cuotas = resultado.numero_cuotas
-    simulacion.numero_anios = resultado.numero_anios
     simulacion.porcentaje_cuota_final = redondear_tasa(resultado.porcentaje_cuota_final)
     simulacion.cuota_inicial = redondear_moneda(resultado.cuota_inicial)
     simulacion.cuota_final = redondear_moneda(resultado.cuota_final)
@@ -183,11 +185,11 @@ def construir_filas_cronograma(resultado: ResultadoSimulacion) -> list[Cronogram
             numero_periodo=fila["numero_periodo"],
             fecha_pago=fila["fecha_pago"],
             tipo_periodo=fila["tipo_periodo"],
-            saldo_inicial_cuoton=fila["saldo_inicial_cuoton"],
-            interes_cuoton=fila["interes_cuoton"],
-            amortizacion_cuoton=fila["amortizacion_cuoton"],
-            desgravamen_cuoton=fila["desgravamen_cuoton"],
-            saldo_final_cuoton=fila["saldo_final_cuoton"],
+            saldo_inicial_cuota_final=fila["saldo_inicial_cuota_final"],
+            interes_cuota_final=fila["interes_cuota_final"],
+            amortizacion_cuota_final=fila["amortizacion_cuota_final"],
+            desgravamen_cuota_final=fila["desgravamen_cuota_final"],
+            saldo_final_cuota_final=fila["saldo_final_cuota_final"],
             saldo_inicial=fila["saldo_inicial"],
             interes=fila["interes"],
             cuota=fila["cuota"],

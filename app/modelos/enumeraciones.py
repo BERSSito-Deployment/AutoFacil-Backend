@@ -18,32 +18,48 @@ class TipoTasa(str, Enum):
 
 
 class Capitalizacion(str, Enum):
-    """Frecuencias de capitalizacion admitidas para una tasa nominal (TNA).
-
-    El modelo del Excel solo contempla capitalizacion diaria o mensual.
-    """
+    """Frecuencias con las que capitaliza una tasa nominal (TNA)."""
 
     DIARIA = "DIARIA"
+    QUINCENAL = "QUINCENAL"
     MENSUAL = "MENSUAL"
+    BIMESTRAL = "BIMESTRAL"
+    TRIMESTRAL = "TRIMESTRAL"
+    CUATRIMESTRAL = "CUATRIMESTRAL"
+    SEMESTRAL = "SEMESTRAL"
+    ANUAL = "ANUAL"
 
 
 class Plan(str, Enum):
-    """Plan de pagos: define el numero de cuotas y el porcentaje de cuota final."""
+    """Plan de pagos del credito.
+
+    Los planes 24 y 36 son los del producto Compra Inteligente (con su numero
+    de cuotas y cuota final sugerida). El plan personalizado deja elegir los
+    meses a mano.
+    """
 
     PLAN_24 = "PLAN_24"
     PLAN_36 = "PLAN_36"
+    PERSONALIZADO = "PERSONALIZADO"
+
+    def cuotas(self, numero_cuotas_manual: int | None = None) -> int:
+        """Numero de cuotas del plan; el personalizado usa el valor manual."""
+
+        if self is Plan.PLAN_24:
+            return 24
+        if self is Plan.PLAN_36:
+            return 36
+        if numero_cuotas_manual is None or numero_cuotas_manual <= 0:
+            raise ValueError("Indique el numero de meses del plan personalizado.")
+        return numero_cuotas_manual
 
     @property
-    def numero_cuotas(self) -> int:
-        return 24 if self is Plan.PLAN_24 else 36
+    def cuota_final_sugerida(self) -> str:
+        """Porcentaje de cuota final por defecto (decimal, como texto)."""
 
-    @property
-    def numero_anios(self) -> int:
-        return 2 if self is Plan.PLAN_24 else 3
-
-    @property
-    def porcentaje_cuota_final(self) -> str:
-        return "0.50" if self is Plan.PLAN_24 else "0.40"
+        if self is Plan.PLAN_24:
+            return "0.50"
+        return "0.40"
 
 
 class TipoPeriodo(str, Enum):

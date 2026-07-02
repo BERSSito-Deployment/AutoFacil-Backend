@@ -1,62 +1,57 @@
-"""Conversion entre tasas de interes (TNA, TEA, TEM)."""
+"""Conversion entre tasas de interes (TNA, TEA, TEM).
+
+Las conversiones dependen del anio elegido: ordinario (360 dias) o natural
+(365 dias). Con anio ordinario y capitalizacion mensual se obtienen los valores
+clasicos (12 capitalizaciones al anio, TEM = (1+TEA)^(1/12) - 1).
+"""
 
 from decimal import Decimal
 
 from app.modelos.enumeraciones import Capitalizacion, TipoTasa
-from app.utilidades.decimales import MESES_ANIO, UNO, a_decimal, potencia
+from app.utilidades.decimales import DIAS_PERIODO, UNO, a_decimal, potencia
 
-# Capitalizaciones por anio (anio comercial de 360 dias para la diaria).
-CAPITALIZACIONES_POR_ANIO: dict[Capitalizacion, Decimal] = {
-    Capitalizacion.DIARIA: Decimal("360"),
-    Capitalizacion.MENSUAL: Decimal("12"),
+# Duracion en dias de cada periodo de capitalizacion. El numero de
+# capitalizaciones al anio sale de dividir los dias del anio entre esto
+# (ej.: anio de 360 con capitalizacion mensual -> 360/30 = 12 veces al anio).
+DIAS_CAPITALIZACION: dict[Capitalizacion, Decimal] = {
+    Capitalizacion.DIARIA: Decimal("1"),
+    Capitalizacion.QUINCENAL: Decimal("15"),
+    Capitalizacion.MENSUAL: Decimal("30"),
+    Capitalizacion.BIMESTRAL: Decimal("60"),
+    Capitalizacion.TRIMESTRAL: Decimal("90"),
+    Capitalizacion.CUATRIMESTRAL: Decimal("120"),
+    Capitalizacion.SEMESTRAL: Decimal("180"),
+    Capitalizacion.ANUAL: Decimal("360"),
 }
 
 
-def convertir_tea_a_tem(tea: Decimal) -> Decimal:
-    """Convierte una tasa efectiva anual a tasa efectiva mensual.
-
-    Aplica la equivalencia de tasas: TEM = (1 + TEA)^(1/12) - 1.
-    """
-
-    tea = a_decimal(tea)
-    exponente = UNO / MESES_ANIO
-    return potencia(UNO + tea, exponente) - UNO
-
-
 def convertir_tna_a_tea(tna: Decimal, capitalizaciones_por_anio: Decimal) -> Decimal:
-    """Convierte una tasa nominal anual a tasa efectiva anual.
-
-    Aplica TEA = (1 + TNA/m)^m - 1, donde m es el numero de capitalizaciones
-    por anio asociado a la frecuencia de capitalizacion.
-    """
+    """Pasa una tasa nominal anual a efectiva anual: TEA = (1 + TNA/m)^m - 1."""
 
     tna = a_decimal(tna)
     m = a_decimal(capitalizaciones_por_anio)
-    tasa_por_periodo = tna / m
-    return potencia(UNO + tasa_por_periodo, m) - UNO
+    return potencia(UNO + tna / m, m) - UNO
 
 
-def obtener_capitalizaciones(capitalizacion: Capitalizacion | None) -> Decimal:
-    """Devuelve el numero de capitalizaciones por anio de la frecuencia indicada."""
+def convertir_tea_a_tem(tea: Decimal, dias_anio: int = 360) -> Decimal:
+    """Pasa una tasa efectiva anual a la tasa del periodo de pago (30 dias)."""
 
-    if capitalizacion is None:
-        raise ValueError(
-            "La capitalizacion es obligatoria cuando la tasa es nominal."
-        )
-    if capitalizacion not in CAPITALIZACIONES_POR_ANIO:
-        raise ValueError("La capitalizacion indicada no es valida.")
-    return CAPITALIZACIONES_POR_ANIO[capitalizacion]
+    tea = a_decimal(tea)
+    exponente = DIAS_PERIODO / Decimal(dias_anio)
+    return potencia(UNO + tea, exponente) - UNO
 
 
 def calcular_tasas_equivalentes(
     tipo_tasa: TipoTasa,
     valor_tasa: Decimal,
     capitalizacion: Capitalizacion | None = None,
+    dias_anio: int = 360,
 ) -> tuple[Decimal, Decimal]:
-    """Calcula la TEA y la TEM equivalentes a partir de la tasa ingresada.
+    """Devuelve (TEA, TEM) equivalentes a la tasa ingresada.
 
-    Devuelve la tupla (TEA, TEM). El valor de la tasa se interpreta en formato
-    decimal (por ejemplo 0.18 para 18%).
+    Si la tasa es nominal, primero se convierte a efectiva anual usando cuantas
+    veces capitaliza en el anio; luego la TEA se lleva a la tasa del periodo de
+    pago de 30 dias (TEM). Las tasas van en formato decimal (0.18 = 18%).
     """
 
     valor_tasa = a_decimal(valor_tasa)
@@ -66,18 +61,19 @@ def calcular_tasas_equivalentes(
     if tipo_tasa == TipoTasa.EFECTIVA:
         tea = valor_tasa
     elif tipo_tasa == TipoTasa.NOMINAL:
-        m = obtener_capitalizaciones(capitalizacion)
+        if capitalizacion is None:
+            raise ValueError("La capitalizacion es obligatoria cuando la tasa es nominal.")
+        m = Decimal(dias_anio) / DIAS_CAPITALIZACION[capitalizacion]
         tea = convertir_tna_a_tea(valor_tasa, m)
     else:
         raise ValueError("El tipo de tasa indicado no es valido.")
 
-    tem = convertir_tea_a_tem(tea)
-    return tea, tem
+    return tea, convertir_tea_a_tem(tea, dias_anio)
 
 
-def anual_a_mensual_compuesta(tasa_anual: Decimal) -> Decimal:
-    """Convierte cualquier tasa efectiva anual (por ejemplo el COK) a mensual."""
+def anual_a_periodica(tasa_anual: Decimal, dias_anio: int = 360) -> Decimal:
+    """Pasa una tasa efectiva anual (por ejemplo el COK) a la tasa de 30 dias."""
 
     tasa_anual = a_decimal(tasa_anual)
-    exponente = UNO / MESES_ANIO
+    exponente = DIAS_PERIODO / Decimal(dias_anio)
     return potencia(UNO + tasa_anual, exponente) - UNO

@@ -8,19 +8,19 @@ from app.modelos.enumeraciones import TipoPeriodo
 
 
 class CronogramaFilaRespuesta(BaseModel):
-    """Detalle de un periodo del cronograma (cuoton, cuota regular y flujo)."""
+    """Detalle de un periodo del cronograma (cuota final, cuota regular y flujo)."""
 
     model_config = ConfigDict(from_attributes=True)
 
     numero_periodo: int
     fecha_pago: date
     tipo_periodo: TipoPeriodo
-    # Tramo del cuoton.
-    saldo_inicial_cuoton: float
-    interes_cuoton: float
-    amortizacion_cuoton: float
-    desgravamen_cuoton: float
-    saldo_final_cuoton: float
+    # Tramo de la cuota final.
+    saldo_inicial_cuota_final: float
+    interes_cuota_final: float
+    amortizacion_cuota_final: float
+    desgravamen_cuota_final: float
+    saldo_final_cuota_final: float
     # Tramo regular.
     saldo_inicial: float
     interes: float

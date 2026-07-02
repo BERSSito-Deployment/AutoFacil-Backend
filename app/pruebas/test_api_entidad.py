@@ -163,7 +163,7 @@ def test_cualquier_vehiculo_activo_se_puede_simular():
 
 
 def test_planes_difieren_la_cuota_final_y_cierran_en_cero():
-    """Producto Compra Inteligente: ambos planes difieren el cuoton al periodo N+1."""
+    """Ambos planes dejan la cuota final para el periodo N+1."""
 
     h, veh = _ids()
     veh_pen = _veh_pen(veh)["id"]
@@ -179,16 +179,16 @@ def test_planes_difieren_la_cuota_final_y_cierran_en_cero():
         headers=h,
     ).json()
 
-    # El cuoton es 40% (Plan 36) y 50% (Plan 24) del precio.
+    # La cuota final sugerida es 40% (Plan 36) y 50% (Plan 24) del precio.
     assert plan36["porcentaje_cuota_final"] == 0.40
     assert plan24["porcentaje_cuota_final"] == 0.50
-    # El cronograma tiene N+1 filas y el cuoton se paga en la ultima.
+    # El cronograma tiene N+1 filas y la cuota final se paga en la ultima.
     assert len(plan36["cronograma"]) == 37 and len(plan24["cronograma"]) == 25
     for res in (plan36, plan24):
         ultima = res["cronograma"][-1]
         assert ultima["tipo_periodo"] == "CUOTA_FINAL"
-        assert ultima["amortizacion_cuoton"] > 0
-        assert abs(ultima["saldo_final_cuoton"]) < 0.01
+        assert ultima["amortizacion_cuota_final"] > 0
+        assert abs(ultima["saldo_final_cuota_final"]) < 0.01
         assert abs(ultima["saldo_final"]) < 0.01
 
 
@@ -199,7 +199,7 @@ def test_simulacion_valida_saldo_cero_e_indicadores():
     r = _crear_sim(h, veh)
     assert r.status_code == 201
     sim = r.json()
-    assert abs(sim["cronograma"][-1]["saldo_final_cuoton"]) < 0.01
+    assert abs(sim["cronograma"][-1]["saldo_final_cuota_final"]) < 0.01
     assert sim["van"] is not None and sim["tir_mensual"] is not None and sim["tcea"] is not None
     assert "saldo_financiado" in sim
 
@@ -386,10 +386,10 @@ def test_editar_cambiando_moneda_convierte_precio_conservado():
 
 
 def test_cuota_final_mayor_que_saldo_rechazada():
-    """Si la cuota inicial es tan alta que el cuoton supera al prestamo, se rechaza."""
+    """Si la cuota inicial es tan alta que no queda saldo, se rechaza."""
 
     h, veh = _ids()
-    # Cuota inicial 99%: el prestamo queda en 1% del precio, menor que el cuoton
+    # Cuota inicial 99%: el prestamo queda en 1% del precio, menor que la cuota final
     # (40% del precio en Plan 36): no queda saldo para las cuotas mensuales.
     r = cliente.post(
         "/simulaciones/calcular",

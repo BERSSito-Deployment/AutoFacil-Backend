@@ -7,7 +7,8 @@ getcontext().prec = PRECISION_INTERNA
 
 CERO = Decimal("0")
 UNO = Decimal("1")
-MESES_ANIO = Decimal("12")
+# Cada cuota vence a los 30 dias de la anterior (mes comercial).
+DIAS_PERIODO = Decimal("30")
 
 
 def a_decimal(valor: object) -> Decimal:

@@ -45,7 +45,7 @@ ETIQUETAS_OPENAPI = [
         "name": "Simulaciones",
         "description": (
             "Nucleo de AutoFacil: previsualizacion (`/calcular`), guardado, listado con "
-            "filtros, detalle (con el cronograma de la cuota regular y del cuoton), edicion "
+            "filtros, detalle (con el cronograma de la cuota regular y de la cuota final), edicion "
             "con recalculo, recalculo y archivado (baja logica) de las propuestas de credito "
             "vehicular Compra Inteligente."
         ),
@@ -66,12 +66,12 @@ vehiculos y sus simulaciones.
 
 ### Producto
 
-Producto **Compra Inteligente** (estilo Interbank, Peru): metodo frances vencido
-ordinario con meses comerciales de 30 dias (NDxA = 360). El precio se reparte en
-cuota inicial, cuotas mensuales y un **cuoton** (cuota final) que se difiere y se
-paga integro en el periodo **N+1**. El **plan** define el numero de cuotas y el
-cuoton: Plan 24 -> 24 cuotas y 50%; Plan 36 -> 36 cuotas y 40%. La tasa es fija
-(efectiva o nominal; si es nominal la capitalizacion es diaria o mensual). Los
+Producto **Compra Inteligente** (Peru): metodo frances vencido con meses
+comerciales de 30 dias y anio de 360 dias (ordinario) o 365 (natural). El precio
+se reparte en cuota inicial, cuotas mensuales y una **cuota final** que se deja
+para el periodo **N+1**. El plan define las cuotas: Plan 24 (24 cuotas, cuota
+final sugerida 50%), Plan 36 (36 cuotas, sugerida 40%) o personalizado (meses a
+eleccion). La tasa es fija, efectiva o nominal con su capitalizacion. Los
 calculos usan aritmetica decimal de alta precision y no redondean valores
 intermedios.
 

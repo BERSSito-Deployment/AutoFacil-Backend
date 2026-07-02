@@ -75,18 +75,18 @@ def test_totales_coinciden_con_el_excel():
 
 
 def test_estructura_cronograma_coincide_con_el_excel():
-    """37 periodos, gracia 3T+3P, cuoton pagado en N+1 y saldos en cero."""
+    """37 periodos, gracia 3T+3P, cuota final pagada en N+1 y saldos en cero."""
 
     r = calcular_simulacion(_entrada_maestra())
-    assert len(r.filas) == 37  # N=36 cuotas + el cuoton en el periodo 37
+    assert len(r.filas) == 37  # N=36 cuotas + la cuota final en el periodo 37
 
     # Gracia: 3 meses total y luego 3 parcial.
     assert [f.tipo_periodo for f in r.filas[:3]] == [TipoPeriodo.GRACIA_TOTAL] * 3
     assert [f.tipo_periodo for f in r.filas[3:6]] == [TipoPeriodo.GRACIA_PARCIAL] * 3
     assert r.filas[6].tipo_periodo == TipoPeriodo.CUOTA_ORDINARIA
 
-    # Periodo 1 (gracia total): el cuoton arranca en su valor presente.
-    assert abs(r.filas[0].saldo_inicial_cuoton - Decimal("3959.01")) < TOL_MONTO
+    # Periodo 1 (gracia total): la cuota final arranca en su valor presente.
+    assert abs(r.filas[0].saldo_inicial_cuota_final - Decimal("3959.01")) < TOL_MONTO
     assert abs(r.filas[0].saldo_inicial - Decimal("9015.99")) < TOL_MONTO
     assert abs(r.filas[0].flujo - Decimal("-35.42")) < TOL_MONTO
 
@@ -95,17 +95,17 @@ def test_estructura_cronograma_coincide_con_el_excel():
     assert abs(r.filas[6].amortizacion - Decimal("256.86")) < TOL_MONTO
     assert abs(r.filas[6].flujo - Decimal("-410.16")) < TOL_MONTO
 
-    # Periodo 37: se cancela el cuoton (= cuota final) y todo cierra en cero.
+    # Periodo 37: se paga la cuota final y todo cierra en cero.
     ultima = r.filas[-1]
     assert ultima.tipo_periodo == TipoPeriodo.CUOTA_FINAL
-    assert abs(ultima.amortizacion_cuoton - Decimal("6400.00")) < TOL_MONTO
+    assert abs(ultima.amortizacion_cuota_final - Decimal("6400.00")) < TOL_MONTO
     assert abs(ultima.flujo - Decimal("-6431.00")) < TOL_MONTO
-    assert abs(ultima.saldo_final_cuoton) < TOL_MONTO
+    assert abs(ultima.saldo_final_cuota_final) < TOL_MONTO
     assert abs(r.filas[35].saldo_final) < TOL_MONTO  # saldo regular en cero en N
 
 
-def test_plan_24_difiere_cuoton_en_periodo_25():
-    """Plan 24: 24 cuotas, cuota final 50% y cuoton en el periodo 25."""
+def test_plan_24_paga_la_cuota_final_en_periodo_25():
+    """Plan 24: 24 cuotas y cuota final del 50% pagada en el periodo 25."""
 
     entrada = _entrada_maestra()
     entrada.plan = Plan.PLAN_24
@@ -115,7 +115,7 @@ def test_plan_24_difiere_cuoton_en_periodo_25():
     assert r.cuota_final == Decimal("16000") * Decimal("0.50")
     assert len(r.filas) == 25
     assert r.filas[-1].tipo_periodo == TipoPeriodo.CUOTA_FINAL
-    assert abs(r.filas[-1].saldo_final_cuoton) < TOL_MONTO
+    assert abs(r.filas[-1].saldo_final_cuota_final) < TOL_MONTO
 
 
 def test_costo_en_efectivo_no_eleva_el_prestamo():

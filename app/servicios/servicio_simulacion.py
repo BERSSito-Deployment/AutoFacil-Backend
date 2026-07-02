@@ -14,7 +14,7 @@ from app.servicios.calculadora_financiera import (
 from app.servicios.servicio_tcea import calcular_tcea
 from app.utilidades.decimales import (
     CERO,
-    MESES_ANIO,
+    DIAS_PERIODO,
     UNO,
     a_decimal,
     potencia,
@@ -43,7 +43,11 @@ class EntradaSimulacion:
     tipo_tasa: TipoTasa
     valor_tasa: Decimal
     capitalizacion: Capitalizacion | None
-    # Cuota final (cuoton). Si es None se usa el valor por defecto del plan.
+    # Meses del credito cuando el plan es personalizado.
+    numero_cuotas: int | None = None
+    # Anio para las conversiones de tasas: ordinario (360 dias) o natural (365).
+    dias_anio: int = 360
+    # Cuota final. Si es None se usa el porcentaje sugerido por el plan.
     porcentaje_cuota_final: Decimal | None = None
     # Gracia al inicio: meses de gracia total y, a continuacion, de gracia parcial.
     meses_gracia_total: int = 0
@@ -84,7 +88,7 @@ class ResultadoSimulacion:
     precio_vehiculo: Decimal
     plan: Plan
     numero_cuotas: int
-    numero_anios: int
+    dias_anio: int
     porcentaje_cuota_inicial: Decimal
     cuota_inicial: Decimal
     porcentaje_cuota_final: Decimal
@@ -136,9 +140,13 @@ def _validar_entrada(entrada: EntradaSimulacion) -> None:
     if entrada.tipo_tasa == TipoTasa.NOMINAL and entrada.capitalizacion is None:
         raise ValueError("La capitalizacion es obligatoria cuando la tasa es nominal.")
 
+    if entrada.dias_anio not in (360, 365):
+        raise ValueError("Los dias por anio deben ser 360 (ordinario) o 365 (natural).")
+
     if entrada.meses_gracia_total < 0 or entrada.meses_gracia_parcial < 0:
         raise ValueError("Los meses de gracia no pueden ser negativos.")
-    if entrada.meses_gracia_total + entrada.meses_gracia_parcial >= entrada.plan.numero_cuotas:
+    cuotas = entrada.plan.cuotas(entrada.numero_cuotas)
+    if entrada.meses_gracia_total + entrada.meses_gracia_parcial >= cuotas:
         raise ValueError("Los meses de gracia deben ser menores que el numero de cuotas.")
 
     for nombre, costo in (
@@ -176,12 +184,14 @@ def calcular_simulacion(entrada: EntradaSimulacion) -> ResultadoSimulacion:
     precio = a_decimal(entrada.precio_vehiculo)
     porcentaje_inicial = a_decimal(entrada.porcentaje_cuota_inicial)
     plan = entrada.plan
-    numero_cuotas = plan.numero_cuotas
-    # La cuota final la puede fijar el usuario; si no, se usa el default del plan.
+    numero_cuotas = plan.cuotas(entrada.numero_cuotas)
+    # Cuantas cuotas de 30 dias caben en el anio elegido (12 con anio de 360).
+    periodos_anio = Decimal(entrada.dias_anio) / DIAS_PERIODO
+    # La cuota final la puede fijar el usuario; si no, se usa la sugerida del plan.
     porcentaje_final = a_decimal(
         entrada.porcentaje_cuota_final
         if entrada.porcentaje_cuota_final is not None
-        else plan.porcentaje_cuota_final
+        else plan.cuota_final_sugerida
     )
 
     # La cuota inicial y la final no pueden cubrir todo el precio: algo debe quedar
@@ -192,7 +202,7 @@ def calcular_simulacion(entrada: EntradaSimulacion) -> ResultadoSimulacion:
         )
 
     cuota_inicial = precio * porcentaje_inicial   # lo que se adelanta al inicio
-    cuota_final = precio * porcentaje_final        # el cuoton (pago grande del final)
+    cuota_final = precio * porcentaje_final        # el pago grande que se deja para el final
 
     # Los costos iniciales "financiados" se suman al prestamo; los "al contado" no.
     total_financiados = sum((c.monto for c in entrada._costos() if c.financiado), CERO)
@@ -203,14 +213,16 @@ def calcular_simulacion(entrada: EntradaSimulacion) -> ResultadoSimulacion:
             "El monto del prestamo debe ser mayor que cero; revise la cuota inicial."
         )
 
-    # 2) La tasa que ingresa el usuario (anual) se pasa a su equivalente mensual.
+    # 2) La tasa que ingresa el usuario (anual) se pasa a su equivalente mensual,
+    # respetando el anio elegido (360 o 365 dias) y la capitalizacion si es nominal.
     tea, tem = servicio_tasas.calcular_tasas_equivalentes(
-        entrada.tipo_tasa, entrada.valor_tasa, entrada.capitalizacion
+        entrada.tipo_tasa, entrada.valor_tasa, entrada.capitalizacion, entrada.dias_anio
     )
 
-    # El seguro de riesgo se da como % anual del precio; se reparte entre 12 cuotas.
+    # El seguro de riesgo se da como % anual del precio; se reparte entre las
+    # cuotas que caben en un anio.
     desgravamen_mensual = a_decimal(entrada.seguro_desgravamen_mensual)
-    seguro_riesgo_periodico = a_decimal(entrada.seguro_riesgo_anual) * precio / MESES_ANIO
+    seguro_riesgo_periodico = a_decimal(entrada.seguro_riesgo_anual) * precio / periodos_anio
 
     parametros = ParametrosCronograma(
         monto_prestamo=monto_prestamo,
@@ -226,7 +238,7 @@ def calcular_simulacion(entrada: EntradaSimulacion) -> ResultadoSimulacion:
         gastos_adm_periodico=a_decimal(entrada.gastos_adm_periodico),
         fecha_inicio=entrada.fecha_inicio,
     )
-    # 3) El cronograma mes a mes con las cuotas y el cuoton.
+    # 3) El cronograma mes a mes con las cuotas y la cuota final.
     cronograma = generar_cronograma(parametros)
 
     # 4) El flujo de caja visto por la persona: en el momento 0 recibe el prestamo
@@ -237,7 +249,7 @@ def calcular_simulacion(entrada: EntradaSimulacion) -> ResultadoSimulacion:
     # COK: la rentabilidad que la persona podria ganar poniendo su dinero en otro
     # lado. Se usa para traer los pagos futuros a valor de hoy (el VAN).
     cok_anual = a_decimal(entrada.cok_anual)
-    cok_mensual = servicio_tasas.anual_a_mensual_compuesta(cok_anual)
+    cok_mensual = servicio_tasas.anual_a_periodica(cok_anual, entrada.dias_anio)
     # VAN: compara lo que recibe hoy con lo que paga despues, traido a valor de hoy
     # usando el COK. Ayuda a ver si conviene financiarse frente a otra alternativa.
     van = servicio_van_tir.calcular_van(flujos, cok_mensual)
@@ -245,18 +257,18 @@ def calcular_simulacion(entrada: EntradaSimulacion) -> ResultadoSimulacion:
     # TIR: la tasa mensual real de la operacion (la que hace que el VAN sea cero).
     tir_mensual = servicio_van_tir.calcular_tir(flujos)
     tir_anual = (
-        potencia(UNO + tir_mensual, MESES_ANIO) - UNO if tir_mensual is not None else None
+        potencia(UNO + tir_mensual, periodos_anio) - UNO if tir_mensual is not None else None
     )
-    # TCEA: el costo real anual del credito. Resume en una sola tasa TODO lo que se
+    # TCEA: el costo real anual del credito. Resume en una sola tasa todo lo que se
     # paga (intereses + seguros + cargos), asi se puede comparar entre creditos.
-    _, tcea = calcular_tcea(flujos)
+    _, tcea = calcular_tcea(flujos, periodos_anio)
 
     return ResultadoSimulacion(
         moneda=entrada.moneda,
         precio_vehiculo=precio,
         plan=plan,
         numero_cuotas=numero_cuotas,
-        numero_anios=plan.numero_anios,
+        dias_anio=entrada.dias_anio,
         porcentaje_cuota_inicial=porcentaje_inicial,
         cuota_inicial=cuota_inicial,
         porcentaje_cuota_final=porcentaje_final,
@@ -304,11 +316,11 @@ def redondear_fila(fila: FilaCronograma) -> dict:
         "numero_periodo": fila.numero_periodo,
         "fecha_pago": fila.fecha_pago,
         "tipo_periodo": fila.tipo_periodo,
-        "saldo_inicial_cuoton": redondear_moneda(fila.saldo_inicial_cuoton),
-        "interes_cuoton": redondear_moneda(fila.interes_cuoton),
-        "amortizacion_cuoton": redondear_moneda(fila.amortizacion_cuoton),
-        "desgravamen_cuoton": redondear_moneda(fila.desgravamen_cuoton),
-        "saldo_final_cuoton": redondear_moneda(fila.saldo_final_cuoton),
+        "saldo_inicial_cuota_final": redondear_moneda(fila.saldo_inicial_cuota_final),
+        "interes_cuota_final": redondear_moneda(fila.interes_cuota_final),
+        "amortizacion_cuota_final": redondear_moneda(fila.amortizacion_cuota_final),
+        "desgravamen_cuota_final": redondear_moneda(fila.desgravamen_cuota_final),
+        "saldo_final_cuota_final": redondear_moneda(fila.saldo_final_cuota_final),
         "saldo_inicial": redondear_moneda(fila.saldo_inicial),
         "interes": redondear_moneda(fila.interes),
         "cuota": redondear_moneda(fila.cuota),
@@ -337,7 +349,7 @@ def redondear_resultado(resultado: ResultadoSimulacion) -> dict:
         "precio_vehiculo": redondear_moneda(resultado.precio_vehiculo),
         "plan": resultado.plan,
         "numero_cuotas": resultado.numero_cuotas,
-        "numero_anios": resultado.numero_anios,
+        "dias_anio": resultado.dias_anio,
         "porcentaje_cuota_inicial": redondear_tasa(resultado.porcentaje_cuota_inicial),
         "cuota_inicial": redondear_moneda(resultado.cuota_inicial),
         "porcentaje_cuota_final": redondear_tasa(resultado.porcentaje_cuota_final),
