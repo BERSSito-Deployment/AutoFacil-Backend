@@ -1,4 +1,4 @@
-"""Pruebas del cronograma de pagos (cuota regular + cuoton diferido)."""
+"""Pruebas del cronograma de pagos (cuota regular + cuota final diferida)."""
 
 from datetime import date
 from decimal import Decimal
@@ -60,33 +60,33 @@ def test_cuota_francesa_tasa_cero():
     assert cuota == Decimal("1000")
 
 
-def test_cronograma_tiene_un_periodo_extra_para_el_cuoton():
-    """El cronograma tiene N+1 filas: las N cuotas y el cuoton en el periodo N+1."""
+def test_cronograma_tiene_un_periodo_extra_para_la_cuota_final():
+    """El cronograma tiene N+1 filas: las N cuotas y la cuota final en el periodo N+1."""
 
     resultado = generar_cronograma(_parametros())
-    assert len(resultado.filas) == 13  # 12 cuotas + cuoton
+    assert len(resultado.filas) == 13  # 12 cuotas + cuota final
     assert resultado.filas[-1].numero_periodo == 13
     assert resultado.filas[-1].tipo_periodo == TipoPeriodo.CUOTA_FINAL
-    # El saldo regular cierra en cero en la ultima cuota (N) y el cuoton en N+1.
+    # El saldo regular cierra en cero en la ultima cuota (N) y la cuota final en N+1.
     assert abs(resultado.filas[11].saldo_final) < TOLERANCIA
-    assert abs(resultado.filas[-1].saldo_final_cuoton) < TOLERANCIA
+    assert abs(resultado.filas[-1].saldo_final_cuota_final) < TOLERANCIA
 
 
-def test_cuoton_se_paga_integro_en_el_periodo_final():
-    """En el periodo N+1 se cancela el cuoton (sin desgravamen, = cuota final)."""
+def test_cuota_final_se_paga_integro_en_el_periodo_final():
+    """En el periodo N+1 se paga completa la cuota final."""
 
     resultado = generar_cronograma(_parametros(cuota_final=Decimal("4000")))
     ultima = resultado.filas[-1]
-    assert abs(ultima.amortizacion_cuoton - Decimal("4000")) < TOLERANCIA
-    # Las cuotas regulares no amortizan el cuoton (solo el saldo financiado).
-    assert all(f.amortizacion_cuoton == Decimal("0") for f in resultado.filas[:-1])
+    assert abs(ultima.amortizacion_cuota_final - Decimal("4000")) < TOLERANCIA
+    # Las cuotas regulares no amortizan la cuota final (solo el saldo financiado).
+    assert all(f.amortizacion_cuota_final == Decimal("0") for f in resultado.filas[:-1])
 
 
-def test_saldo_financiado_excluye_el_valor_presente_del_cuoton():
-    """El tramo regular amortiza solo el saldo (prestamo menos VP del cuoton)."""
+def test_saldo_financiado_excluye_el_valor_presente_de_la_cuota_final():
+    """El tramo regular amortiza solo el saldo (prestamo menos VP de la cuota final)."""
 
     resultado = generar_cronograma(_parametros(cuota_final=Decimal("4000")))
-    # VP del cuoton = 4000 / 1.01^13 ; saldo = 10000 - VP.
+    # VP de la cuota final = 4000 / 1.01^13 ; saldo = 10000 - VP.
     vp = Decimal("4000") / (Decimal("1.01") ** 13)
     assert abs(resultado.saldo_financiado - (Decimal("10000") - vp)) < TOLERANCIA
     assert abs(resultado.filas[0].saldo_inicial - resultado.saldo_financiado) < TOLERANCIA

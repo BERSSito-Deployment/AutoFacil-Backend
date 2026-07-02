@@ -2,7 +2,7 @@
 
 from collections.abc import Generator
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import obtener_configuracion
@@ -49,9 +49,41 @@ def obtener_sesion() -> Generator[Session, None, None]:
         sesion.close()
 
 
+def _sincronizar_esquema() -> None:
+    """Deja la base de datos alineada con los modelos actuales.
+
+    SQLite no altera tablas ya creadas, asi que si el codigo cambio (columnas
+    nuevas o quitadas) los INSERT empiezan a fallar. Aqui se compara cada tabla
+    con su modelo y, si no coinciden las columnas, la tabla se elimina para que
+    `create_all` la vuelva a crear. Las tablas que ya no tienen modelo tambien
+    se eliminan. La tabla de usuarios solo se toca si su estructura cambio, de
+    modo que las cuentas registradas se conservan entre versiones.
+    """
+
+    inspector = inspect(motor)
+    tablas_reales = set(inspector.get_table_names())
+    tablas_modelo = set(Base.metadata.tables.keys())
+
+    a_eliminar: list[str] = []
+    for tabla in tablas_reales - tablas_modelo:
+        a_eliminar.append(tabla)
+    for tabla in tablas_reales & tablas_modelo:
+        columnas_reales = {c["name"] for c in inspector.get_columns(tabla)}
+        columnas_modelo = {c.name for c in Base.metadata.tables[tabla].columns}
+        if columnas_reales != columnas_modelo:
+            a_eliminar.append(tabla)
+
+    if a_eliminar:
+        with motor.begin() as conexion:
+            conexion.execute(text("PRAGMA foreign_keys=OFF"))
+            for tabla in a_eliminar:
+                conexion.execute(text(f'DROP TABLE IF EXISTS "{tabla}"'))
+
+
 def crear_tablas() -> None:
     """Crea las tablas declaradas que aun no existan."""
 
     from app import modelos  # noqa: F401
 
+    _sincronizar_esquema()
     Base.metadata.create_all(bind=motor)

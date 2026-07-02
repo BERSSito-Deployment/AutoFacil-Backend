@@ -120,6 +120,8 @@ def _solicitud_desde_modelo(simulacion: Simulacion) -> SimulacionCalcularRequest
         moneda=simulacion.moneda,
         tipo_cambio_referencial=simulacion.tipo_cambio_referencial,
         plan=simulacion.plan,
+        numero_cuotas=simulacion.numero_cuotas,
+        dias_anio=simulacion.dias_anio,
         porcentaje_cuota_inicial=simulacion.porcentaje_cuota_inicial,
         porcentaje_cuota_final=simulacion.porcentaje_cuota_final,
         tipo_tasa=simulacion.tipo_tasa,

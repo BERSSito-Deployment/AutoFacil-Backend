@@ -11,7 +11,7 @@ from app.modelos.enumeraciones import TipoPeriodo
 
 
 class CronogramaPago(Base):
-    """Detalle de un periodo: tramo del cuoton, tramo regular y flujo del deudor."""
+    """Detalle de un periodo: tramo de la cuota final, tramo regular y flujo del deudor."""
 
     __tablename__ = "cronogramas_pago"
 
@@ -23,12 +23,12 @@ class CronogramaPago(Base):
     fecha_pago: Mapped[date] = mapped_column(Date, nullable=False)
     tipo_periodo: Mapped[TipoPeriodo] = mapped_column(SqlEnum(TipoPeriodo), nullable=False)
 
-    # Tramo del cuoton (cuota final diferida).
-    saldo_inicial_cuoton: Mapped[float] = mapped_column(TipoMonto, nullable=False, default=0)
-    interes_cuoton: Mapped[float] = mapped_column(TipoMonto, nullable=False, default=0)
-    amortizacion_cuoton: Mapped[float] = mapped_column(TipoMonto, nullable=False, default=0)
-    desgravamen_cuoton: Mapped[float] = mapped_column(TipoMonto, nullable=False, default=0)
-    saldo_final_cuoton: Mapped[float] = mapped_column(TipoMonto, nullable=False, default=0)
+    # Tramo de la cuota final (cuota final diferida).
+    saldo_inicial_cuota_final: Mapped[float] = mapped_column(TipoMonto, nullable=False, default=0)
+    interes_cuota_final: Mapped[float] = mapped_column(TipoMonto, nullable=False, default=0)
+    amortizacion_cuota_final: Mapped[float] = mapped_column(TipoMonto, nullable=False, default=0)
+    desgravamen_cuota_final: Mapped[float] = mapped_column(TipoMonto, nullable=False, default=0)
+    saldo_final_cuota_final: Mapped[float] = mapped_column(TipoMonto, nullable=False, default=0)
 
     # Tramo de la cuota regular.
     saldo_inicial: Mapped[float] = mapped_column(TipoMonto, nullable=False, default=0)

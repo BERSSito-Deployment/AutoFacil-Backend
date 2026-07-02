@@ -3,15 +3,15 @@
 Idea general (producto "Compra Inteligente"):
 El monto del prestamo se paga de dos formas a la vez:
   1) Cuotas mensuales normales (interes + parte del capital + seguros + cargos).
-  2) Un pago grande al final, el "cuoton" (un porcentaje del precio del auto),
-     que se difiere y se paga de una sola vez justo despues de la ultima cuota.
+  2) La cuota final: un pago grande (un porcentaje del precio del auto) que se
+     deja para el final y se paga de una sola vez justo despues de la ultima cuota.
 
-Como una parte de la deuda (el cuoton) se deja para el final, lo que se reparte
-en las cuotas mensuales es menor, por eso esas cuotas salen mas baratas. Para
-saber cuanto reparte cada mes, calculamos cuanto "vale hoy" ese cuoton y se lo
-restamos al prestamo: el resto (saldo_financiado) es lo unico que amortizan las
-cuotas mensuales. El cuoton, mientras tanto, va acumulando su interes mes a mes
-hasta que se paga completo al final.
+Como una parte de la deuda se deja para el final, lo que se reparte en las
+cuotas mensuales es menor y por eso salen mas baratas. Para saber cuanto
+reparte cada mes, calculamos cuanto "vale hoy" esa cuota final y se lo restamos
+al prestamo: el resto (saldo_financiado) es lo unico que amortizan las cuotas
+mensuales. La cuota final, mientras tanto, va acumulando su interes mes a mes
+hasta que se paga completa al final.
 
 Al inicio puede haber meses de gracia: "total" = ese mes no se paga nada y el
 interes se suma a la deuda; "parcial" = ese mes solo se paga el interes.
@@ -34,9 +34,9 @@ class ParametrosCronograma:
     """Parametros de entrada para construir un cronograma de pagos."""
 
     monto_prestamo: Decimal           # lo que se presta (precio - cuota inicial + costos financiados)
-    cuota_final: Decimal              # el cuoton: el pago grande del final
+    cuota_final: Decimal              # el pago grande que se deja para el final
     tem: Decimal                      # tasa de interes mensual
-    numero_cuotas: int                # cuantas cuotas mensuales (el cuoton se paga una despues)
+    numero_cuotas: int                # cuantas cuotas mensuales (la cuota final se paga una despues)
     meses_gracia_total: int           # meses al inicio sin pagar nada
     meses_gracia_parcial: int         # meses al inicio pagando solo el interes
     seguro_desgravamen_mensual: Decimal  # % mensual del seguro de desgravamen
@@ -51,20 +51,20 @@ class ParametrosCronograma:
 class FilaCronograma:
     """Detalle calculado de un periodo del cronograma (valores sin redondear).
 
-    Los importes se expresan como magnitudes positivas; `flujo` es el egreso del
-    deudor de ese periodo (negativo).
+    Los importes se expresan como magnitudes positivas; `flujo` es lo que sale
+    del bolsillo ese mes (negativo).
     """
 
     numero_periodo: int
     fecha_pago: date
     tipo_periodo: TipoPeriodo
-    # Tramo del cuoton (cuota final diferida).
-    saldo_inicial_cuoton: Decimal
-    interes_cuoton: Decimal
-    amortizacion_cuoton: Decimal
-    desgravamen_cuoton: Decimal
-    saldo_final_cuoton: Decimal
-    # Tramo de la cuota regular.
+    # Tramo de la cuota final (el pago que se difiere al final).
+    saldo_inicial_cuota_final: Decimal
+    interes_cuota_final: Decimal
+    amortizacion_cuota_final: Decimal
+    desgravamen_cuota_final: Decimal
+    saldo_final_cuota_final: Decimal
+    # Tramo de la cuota mensual normal.
     saldo_inicial: Decimal
     interes: Decimal
     cuota: Decimal
@@ -83,8 +83,7 @@ class ResultadoCronograma:
     """Cronograma generado junto con los totales acumulados sin redondear."""
 
     filas: list[FilaCronograma] = field(default_factory=list)
-    saldo_financiado: Decimal = CERO   # lo que pagan las cuotas (prestamo - valor de hoy del cuoton)
-    vp_cuoton: Decimal = CERO          # cuanto vale hoy el cuoton
+    saldo_financiado: Decimal = CERO   # lo que pagan las cuotas (prestamo - valor de hoy de la cuota final)
     cuota_ordinaria: Decimal = CERO    # la cuota mensual normal
     total_intereses: Decimal = CERO
     total_amortizado: Decimal = CERO
@@ -117,7 +116,7 @@ def calcular_cuota_francesa(
 
 
 def generar_cronograma(parametros: ParametrosCronograma) -> ResultadoCronograma:
-    """Construye el cronograma completo (N+1 periodos) del metodo Compra Inteligente."""
+    """Construye el cronograma completo: N cuotas mensuales y la cuota final en el mes N+1."""
 
     prestamo = a_decimal(parametros.monto_prestamo)
     cuota_final = a_decimal(parametros.cuota_final)
@@ -140,42 +139,40 @@ def generar_cronograma(parametros: ParametrosCronograma) -> ResultadoCronograma:
     # La cuota mensual carga el interes y el seguro de desgravamen juntos.
     tasa_con_desgravamen = tem + desgravamen
 
-    # Cuanto "vale hoy" el cuoton (su valor presente): se trae al presente el pago
-    # final usando la tasa mensual a lo largo de los N+1 periodos. Ese monto se le
-    # resta al prestamo; lo que queda (saldo_financiado) es lo que pagan las cuotas.
-    vp_cuoton = cuota_final / potencia(UNO + tasa_con_desgravamen, Decimal(n + 1))
-    saldo_financiado = prestamo - vp_cuoton
+    # Cuanto "vale hoy" la cuota final (su valor presente): se trae al presente el
+    # pago del mes N+1 usando la tasa mensual. Ese monto se le resta al prestamo;
+    # lo que queda (saldo_financiado) es lo que pagan las cuotas mensuales.
+    valor_presente_final = cuota_final / potencia(UNO + tasa_con_desgravamen, Decimal(n + 1))
+    saldo_financiado = prestamo - valor_presente_final
     if saldo_financiado <= CERO:
         raise ValueError(
             "La cuota final es demasiado alta: no queda saldo para las cuotas mensuales."
         )
 
-    resultado = ResultadoCronograma(
-        saldo_financiado=saldo_financiado, vp_cuoton=vp_cuoton
-    )
+    resultado = ResultadoCronograma(saldo_financiado=saldo_financiado)
 
     saldo = saldo_financiado          # lo que falta pagar con cuotas mensuales
-    saldo_cuoton = vp_cuoton          # lo que falta crecer el cuoton hasta el final
+    saldo_cf = valor_presente_final   # lo que va acumulando la cuota final
 
-    # Recorremos mes por mes, desde la cuota 1 hasta el pago del cuoton (N+1).
+    # Recorremos mes por mes, desde la cuota 1 hasta el pago final (N+1).
     for nc in range(1, n + 2):
         fecha = avanzar_periodos_comerciales(parametros.fecha_inicio, nc)
 
-        # --- El cuoton (el pago grande del final) ---
-        # Cada mes el cuoton acumula su interes y desgravamen (crece sin pagarse).
-        interes_cuoton = saldo_cuoton * tem
-        desgravamen_cuoton = saldo_cuoton * desgravamen
+        # --- La cuota final (el pago grande que espera al final) ---
+        # Cada mes acumula su interes y desgravamen (crece sin pagarse).
+        interes_cf = saldo_cf * tem
+        desgravamen_cf = saldo_cf * desgravamen
         if nc == n + 1:
-            # Mes final: se paga el cuoton completo (saldo acumulado + lo del mes).
-            amortizacion_cuoton = saldo_cuoton + interes_cuoton + desgravamen_cuoton
-            saldo_final_cuoton = CERO
+            # Mes final: se paga completa (saldo acumulado + lo del mes).
+            amortizacion_cf = saldo_cf + interes_cf + desgravamen_cf
+            saldo_final_cf = CERO
         else:
-            amortizacion_cuoton = CERO
-            saldo_final_cuoton = saldo_cuoton + interes_cuoton + desgravamen_cuoton
+            amortizacion_cf = CERO
+            saldo_final_cf = saldo_cf + interes_cf + desgravamen_cf
 
         # --- La cuota mensual normal ---
         if nc > n:
-            # En el mes del cuoton (N+1) ya no hay cuota mensual, solo el cuoton.
+            # En el mes N+1 ya no hay cuota mensual, solo el pago final.
             saldo_inicial = CERO
             interes = cuota = amortizacion = seguro_desgravamen = CERO
             saldo_final = CERO
@@ -218,7 +215,7 @@ def generar_cronograma(parametros: ParametrosCronograma) -> ResultadoCronograma:
             # se cobra aparte, asi que aqui lo sumamos.
             egreso += seguro_desgravamen
         if nc == n + 1:
-            egreso += amortizacion_cuoton        # el mes final tambien paga el cuoton
+            egreso += amortizacion_cf            # el ultimo mes tambien paga la cuota final
         flujo = -egreso                          # negativo: es dinero que sale
 
         resultado.filas.append(
@@ -226,11 +223,11 @@ def generar_cronograma(parametros: ParametrosCronograma) -> ResultadoCronograma:
                 numero_periodo=nc,
                 fecha_pago=fecha,
                 tipo_periodo=tipo_periodo,
-                saldo_inicial_cuoton=saldo_cuoton,
-                interes_cuoton=interes_cuoton,
-                amortizacion_cuoton=amortizacion_cuoton,
-                desgravamen_cuoton=desgravamen_cuoton,
-                saldo_final_cuoton=saldo_final_cuoton,
+                saldo_inicial_cuota_final=saldo_cf,
+                interes_cuota_final=interes_cf,
+                amortizacion_cuota_final=amortizacion_cf,
+                desgravamen_cuota_final=desgravamen_cf,
+                saldo_final_cuota_final=saldo_final_cf,
                 saldo_inicial=saldo_inicial,
                 interes=interes,
                 cuota=cuota,
@@ -251,7 +248,7 @@ def generar_cronograma(parametros: ParametrosCronograma) -> ResultadoCronograma:
             resultado.total_intereses += cuota - amortizacion - seguro_desgravamen
             resultado.total_amortizado += amortizacion
             resultado.total_seguro_desgravamen += seguro_desgravamen
-        resultado.total_amortizado += amortizacion_cuoton
+        resultado.total_amortizado += amortizacion_cf
         resultado.total_seguro_riesgo += seguro_riesgo
         resultado.total_gps += gps
         resultado.total_portes += portes
@@ -259,6 +256,6 @@ def generar_cronograma(parametros: ParametrosCronograma) -> ResultadoCronograma:
         resultado.monto_total_pagado += egreso
 
         saldo = saldo_final
-        saldo_cuoton = saldo_final_cuoton
+        saldo_cf = saldo_final_cf
 
     return resultado

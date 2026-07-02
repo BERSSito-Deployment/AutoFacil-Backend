@@ -57,6 +57,9 @@ class Simulacion(Base, MarcasTiempoMixin):
         SqlEnum(Capitalizacion), nullable=True
     )
 
+    # Dias del anio usados en las conversiones de tasas (360 ordinario, 365 natural).
+    dias_anio: Mapped[int] = mapped_column(Integer, nullable=False, default=360)
+
     meses_gracia_total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     meses_gracia_parcial: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
@@ -89,7 +92,6 @@ class Simulacion(Base, MarcasTiempoMixin):
 
     # --- Resultados derivados ---
     numero_cuotas: Mapped[int] = mapped_column(Integer, nullable=False)
-    numero_anios: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     porcentaje_cuota_final: Mapped[float] = mapped_column(
         TipoTasaColumna, nullable=False, default=0
     )

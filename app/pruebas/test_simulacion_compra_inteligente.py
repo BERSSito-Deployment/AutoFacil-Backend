@@ -62,22 +62,22 @@ def test_tcea_anualiza_la_tasa_mensual():
     """La TCEA debe ser la anualizacion compuesta de la tasa mensual de costo."""
 
     flujos = [Decimal("2647.13")] + [Decimal("-900")] * 3
-    tasa_mensual, tcea = calcular_tcea(flujos)
+    tasa_mensual, tcea = calcular_tcea(flujos, Decimal("12"))
     assert tasa_mensual is not None and tcea is not None
     esperado = (Decimal("1") + tasa_mensual) ** 12 - Decimal("1")
     assert abs(tcea - esperado) < Decimal("1e-9")
 
 
 def test_simulacion_completa_cierra_en_cero():
-    """La simulacion debe cerrar el saldo regular y el cuoton en cero."""
+    """La simulacion debe cerrar el saldo regular y la cuota final en cero."""
 
     resultado = calcular_simulacion(_entrada_base())
-    assert len(resultado.filas) == 37  # 36 cuotas + cuoton
-    # El cuoton es el 40% del precio (Plan 36).
+    assert len(resultado.filas) == 37  # 36 cuotas + cuota final
+    # La cuota final es el 40% del precio (Plan 36).
     assert resultado.cuota_final == Decimal("80000") * Decimal("0.40")
     assert resultado.monto_prestamo == Decimal("64000")  # 80000 - 20%
     assert abs(resultado.filas[35].saldo_final) < Decimal("1e-6")
-    assert abs(resultado.filas[-1].saldo_final_cuoton) < Decimal("1e-6")
+    assert abs(resultado.filas[-1].saldo_final_cuota_final) < Decimal("1e-6")
     # La cuota regular es constante en los periodos ordinarios.
     ordinarias = {
         round(float(f.cuota), 2)
@@ -107,7 +107,7 @@ def test_simulacion_gracia_total_cierra_en_cero():
     assert resultado.meses_gracia_total == 3
     assert [f.tipo_periodo for f in resultado.filas[:3]] == [TipoPeriodo.GRACIA_TOTAL] * 3
     assert abs(resultado.filas[35].saldo_final) < Decimal("1e-6")
-    assert abs(resultado.filas[-1].saldo_final_cuoton) < Decimal("1e-6")
+    assert abs(resultado.filas[-1].saldo_final_cuota_final) < Decimal("1e-6")
 
 
 def test_simulacion_tasa_nominal():
@@ -124,12 +124,55 @@ def test_simulacion_tasa_nominal():
 
 
 def test_plan_24_usa_cuota_final_del_50_por_ciento():
-    """El Plan 24 difiere el 50% del precio al cuoton y usa 24 cuotas."""
+    """El Plan 24 deja el 50% del precio como cuota final y usa 24 cuotas."""
 
     resultado = calcular_simulacion(_entrada_base(plan=Plan.PLAN_24))
     assert resultado.numero_cuotas == 24
     assert resultado.cuota_final == Decimal("80000") * Decimal("0.50")
     assert len(resultado.filas) == 25
+
+
+def test_plan_personalizado_usa_los_meses_indicados():
+    """Con plan personalizado el credito dura los meses que elija el usuario."""
+
+    resultado = calcular_simulacion(
+        _entrada_base(
+            plan=Plan.PERSONALIZADO,
+            numero_cuotas=18,
+            porcentaje_cuota_final=Decimal("0.30"),
+        )
+    )
+    assert resultado.numero_cuotas == 18
+    assert len(resultado.filas) == 19  # 18 cuotas + la cuota final
+    assert resultado.cuota_final == Decimal("80000") * Decimal("0.30")
+    assert abs(resultado.filas[17].saldo_final) < Decimal("1e-6")
+    assert abs(resultado.filas[-1].saldo_final_cuota_final) < Decimal("1e-6")
+
+
+def test_anio_natural_cambia_las_conversiones():
+    """Con anio natural (365 dias) la TEM baja y la TCEA cambia frente al de 360."""
+
+    ordinario = calcular_simulacion(_entrada_base(dias_anio=360))
+    natural = calcular_simulacion(_entrada_base(dias_anio=365))
+    # Misma TEA, pero el periodo de 30 dias pesa menos dentro de un anio de 365.
+    assert natural.tem < ordinario.tem
+    assert natural.tcea != ordinario.tcea
+    # El cronograma sigue cerrando en cero.
+    assert abs(natural.filas[35].saldo_final) < Decimal("1e-6")
+
+
+def test_capitalizacion_trimestral():
+    """Una TNA 12% con capitalizacion trimestral rinde TEA = (1+0.03)^4 - 1."""
+
+    resultado = calcular_simulacion(
+        _entrada_base(
+            tipo_tasa=TipoTasa.NOMINAL,
+            valor_tasa=Decimal("0.12"),
+            capitalizacion=Capitalizacion.TRIMESTRAL,
+        )
+    )
+    esperado = (Decimal("1.03") ** 4) - Decimal("1")
+    assert abs(resultado.tea_equivalente - esperado) < Decimal("1e-12")
 
 
 def test_costos_financiados_elevan_el_prestamo_y_la_cuota():
@@ -158,9 +201,9 @@ def test_costo_efectivo_no_eleva_el_prestamo():
 
 
 def test_redondeo_cronograma_devuelve_todas_las_filas():
-    """El redondeo de presentacion conserva las N+1 filas y el cuoton final."""
+    """El redondeo de presentacion conserva las N+1 filas y la cuota final."""
 
     crono = redondear_resultado(calcular_simulacion(_entrada_base()))["cronograma"]
     assert len(crono) == 37
-    assert crono[-1]["saldo_final_cuoton"] == Decimal("0.00")
-    assert crono[-1]["amortizacion_cuoton"] > Decimal("0")
+    assert crono[-1]["saldo_final_cuota_final"] == Decimal("0.00")
+    assert crono[-1]["amortizacion_cuota_final"] > Decimal("0")

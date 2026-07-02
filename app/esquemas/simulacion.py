@@ -20,15 +20,19 @@ class ParametrosFinancieros(BaseModel):
 
     moneda: Moneda = Moneda.SOLES
     tipo_cambio_referencial: Decimal | None = Field(default=None, ge=0)
-    # El plan fija el numero de cuotas (Plan 24 -> 24, Plan 36 -> 36).
+    # Plan 24 y Plan 36 fijan las cuotas; el personalizado las toma de numero_cuotas.
     plan: Plan = Plan.PLAN_36
+    # Meses del credito cuando el plan es personalizado (se ignora en los otros).
+    numero_cuotas: int | None = Field(default=None, ge=1, le=120)
+    # Anio para las conversiones de tasas: 360 dias (ordinario) o 365 (natural).
+    dias_anio: int = 360
     porcentaje_cuota_inicial: Decimal = Field(default=Decimal("0.20"), ge=0, le=1)
-    # Cuota final (cuoton). Si no se envia, se usa el valor por defecto del plan
-    # (40% en Plan 36, 50% en Plan 24); el usuario puede cambiarlo.
+    # Cuota final. Si no se envia se usa la sugerida por el plan (40% en Plan 36,
+    # 50% en Plan 24); el usuario puede cambiarla.
     porcentaje_cuota_final: Decimal | None = Field(default=None, ge=0, lt=1)
     tipo_tasa: TipoTasa = TipoTasa.NOMINAL
     valor_tasa: Decimal = Field(..., ge=0, description="Tasa en formato decimal (0.15 = 15%)")
-    # Obligatoria solo cuando la tasa es nominal (TNA): diaria o mensual.
+    # Obligatoria solo cuando la tasa es nominal (TNA).
     capitalizacion: Capitalizacion | None = None
     # Gracia al inicio: meses de gracia total y, a continuacion, de gracia parcial.
     meses_gracia_total: int = Field(default=0, ge=0)
@@ -58,11 +62,16 @@ class ParametrosFinancieros(BaseModel):
 
     @model_validator(mode="after")
     def validar_reglas(self) -> "ParametrosFinancieros":
-        """Valida la tasa nominal, los periodos de gracia y las cuotas inicial/final."""
+        """Revisa que la tasa, el plan, el anio y la gracia sean coherentes."""
 
         if self.tipo_tasa == TipoTasa.NOMINAL and self.capitalizacion is None:
             raise ValueError("La capitalizacion es obligatoria cuando la tasa es nominal.")
-        if self.meses_gracia_total + self.meses_gracia_parcial >= self.plan.numero_cuotas:
+        if self.dias_anio not in (360, 365):
+            raise ValueError("Los dias por anio deben ser 360 (ordinario) o 365 (natural).")
+        if self.plan == Plan.PERSONALIZADO and self.numero_cuotas is None:
+            raise ValueError("Indique el numero de meses del plan personalizado.")
+        cuotas = self.plan.cuotas(self.numero_cuotas)
+        if self.meses_gracia_total + self.meses_gracia_parcial >= cuotas:
             raise ValueError("Los meses de gracia deben ser menores que el numero de cuotas.")
         return self
 
@@ -120,7 +129,7 @@ class IndicadoresSimulacion(BaseModel):
     precio_vehiculo: float
     plan: Plan
     numero_cuotas: int
-    numero_anios: int
+    dias_anio: int
     porcentaje_cuota_inicial: float
     cuota_inicial: float
     porcentaje_cuota_final: float
@@ -206,7 +215,7 @@ class SimulacionRespuesta(BaseModel):
     cok_anual: float
     # Resultados derivados.
     numero_cuotas: int
-    numero_anios: int
+    dias_anio: int
     porcentaje_cuota_final: float
     cuota_inicial: float
     cuota_final: float
