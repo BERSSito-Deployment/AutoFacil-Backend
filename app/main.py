@@ -77,7 +77,8 @@ intermedios.
 
 ### Autenticacion
 
-1. Cree una cuenta en `POST /auth/registro` o use una cuenta de prueba (`demo` /
+1. Cree una cuenta en `POST /auth/registro`. En desarrollo local tambien puede
+   usar una cuenta de prueba si los datos semilla estan activos (`demo` /
    `Demo1234`).
 2. Obtenga el token con `POST /auth/login-json` (o el formulario `POST /auth/login`).
 3. Pulse **Authorize** arriba a la derecha y pegue el token para autorizar las
@@ -99,13 +100,14 @@ async def ciclo_vida(_: FastAPI):
     """Inicializa la base de datos y los datos semilla al arrancar el servicio."""
 
     crear_tablas()
-    from app.datos_semilla import sembrar_datos
+    if configuracion.sembrar_datos_inicio:
+        from app.datos_semilla import sembrar_datos
 
-    sesion = FabricaSesion()
-    try:
-        sembrar_datos(sesion)
-    finally:
-        sesion.close()
+        sesion = FabricaSesion()
+        try:
+            sembrar_datos(sesion)
+        finally:
+            sesion.close()
     yield
 
 
