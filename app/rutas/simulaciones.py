@@ -1,7 +1,5 @@
 """Rutas de calculo y gestion de simulaciones (cada usuario ve solo las suyas)."""
 
-from uuid import uuid4
-
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -34,25 +32,34 @@ enrutador = APIRouter(prefix="/simulaciones", tags=["Simulaciones"])
 
 
 def _validar_para_crear(
-    sesion: Session, solicitud: SimulacionCalcularRequest, usuario: Usuario
+    sesion: Session, solicitud: SimulacionCalcularRequest
 ) -> Vehiculo:
-    """Valida una nueva simulacion: el vehiculo es del usuario y esta activo."""
+    """Valida una nueva simulacion: el vehiculo del catalogo existe y esta activo."""
 
     vehiculo = sesion.get(Vehiculo, solicitud.vehiculo_id)
-    if vehiculo is None or vehiculo.usuario_id != usuario.id or not vehiculo.activo:
+    if vehiculo is None or not vehiculo.activo:
         raise error_validacion("El vehiculo seleccionado no existe o esta inactivo.")
     return vehiculo
 
 
 def _vehiculo_de_simulacion(
-    sesion: Session, solicitud: SimulacionCalcularRequest, usuario: Usuario
+    sesion: Session, solicitud: SimulacionCalcularRequest
 ) -> Vehiculo:
     """Obtiene el vehiculo para previsualizar, editar o recalcular (no exige que siga activo)."""
 
     vehiculo = sesion.get(Vehiculo, solicitud.vehiculo_id)
-    if vehiculo is None or vehiculo.usuario_id != usuario.id:
+    if vehiculo is None:
         raise error_validacion("El vehiculo de la simulacion ya no existe.")
     return vehiculo
+
+
+def _codigo_siguiente(sesion: Session, usuario: Usuario) -> str:
+    """Correlativo por usuario: la primera simulacion de cada cuenta es la 1."""
+
+    existentes = (
+        sesion.query(Simulacion).filter(Simulacion.usuario_id == usuario.id).count()
+    )
+    return f"SIM-{existentes + 1:06d}"
 
 
 def _obtener_simulacion(sesion: Session, simulacion_id: int, usuario: Usuario) -> Simulacion:
@@ -198,7 +205,7 @@ def calcular_simulacion_preview(
 ) -> dict:
     """Calcula una simulacion sin persistirla (previsualizacion)."""
 
-    vehiculo = _vehiculo_de_simulacion(sesion, solicitud, usuario_actual)
+    vehiculo = _vehiculo_de_simulacion(sesion, solicitud)
     try:
         resultado = calcular_desde_solicitud(solicitud, vehiculo)
     except ValueError as exc:
@@ -219,15 +226,14 @@ def crear_simulacion(
 ) -> SimulacionDetalle:
     """Calcula y guarda una nueva simulacion junto con su cronograma."""
 
-    vehiculo = _validar_para_crear(sesion, solicitud, usuario_actual)
+    vehiculo = _validar_para_crear(sesion, solicitud)
     try:
         resultado = calcular_desde_solicitud(solicitud, vehiculo)
     except ValueError as exc:
         raise error_validacion(str(exc)) from exc
 
-    # Codigo temporal hasta conocer el id; se reemplaza por SIM-###### tras el flush.
     simulacion = Simulacion(
-        codigo=f"TMP-{uuid4().hex}",
+        codigo=_codigo_siguiente(sesion, usuario_actual),
         vehiculo_id=solicitud.vehiculo_id,
         usuario_id=usuario_actual.id,
         estado=solicitud.estado,
@@ -235,7 +241,6 @@ def crear_simulacion(
     aplicar_resultado_a_modelo(simulacion, solicitud, resultado)
     sesion.add(simulacion)
     sesion.flush()
-    simulacion.codigo = f"SIM-{simulacion.id:06d}"
     simulacion.cronograma = construir_filas_cronograma(resultado)
     sesion.commit()
     sesion.refresh(simulacion)
@@ -271,7 +276,7 @@ def actualizar_simulacion(
     """Edita los parametros de una simulacion propia y recalcula su cronograma."""
 
     simulacion = _obtener_simulacion(sesion, simulacion_id, usuario_actual)
-    vehiculo = _vehiculo_de_simulacion(sesion, solicitud, usuario_actual)
+    vehiculo = _vehiculo_de_simulacion(sesion, solicitud)
     # Conserva el precio original (convertido si cambia la moneda) salvo que se pida actualizarlo.
     if solicitud.actualizar_precio:
         precio_operacion = None
@@ -310,7 +315,7 @@ def recalcular_simulacion(
 
     simulacion = _obtener_simulacion(sesion, simulacion_id, usuario_actual)
     solicitud = _solicitud_desde_modelo(simulacion)
-    vehiculo = _vehiculo_de_simulacion(sesion, solicitud, usuario_actual)
+    vehiculo = _vehiculo_de_simulacion(sesion, solicitud)
     try:
         # Conserva el precio original de la operacion.
         resultado = calcular_desde_solicitud(

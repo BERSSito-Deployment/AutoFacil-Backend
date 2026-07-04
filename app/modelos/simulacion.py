@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -27,9 +28,12 @@ class Simulacion(Base, MarcasTiempoMixin):
     """Resultado completo de una simulacion, junto con sus parametros de entrada."""
 
     __tablename__ = "simulaciones"
+    # El codigo (SIM-000001, ...) es correlativo por usuario: la primera
+    # simulacion de cada cuenta es siempre la numero 1.
+    __table_args__ = (UniqueConstraint("usuario_id", "codigo"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    codigo: Mapped[str] = mapped_column(String(40), unique=True, nullable=False, index=True)
+    codigo: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
     # Etiqueta opcional para reconocer la simulacion.
     nombre: Mapped[str | None] = mapped_column(String(150), nullable=True)
 
@@ -110,7 +114,6 @@ class Simulacion(Base, MarcasTiempoMixin):
     cok_mensual: Mapped[float] = mapped_column(TipoTasaColumna, nullable=False, default=0)
     van: Mapped[float] = mapped_column(TipoMonto, nullable=False, default=0)
     tir_mensual: Mapped[float | None] = mapped_column(TipoTasaColumna, nullable=True)
-    tir_anual: Mapped[float | None] = mapped_column(TipoTasaColumna, nullable=True)
     tcea: Mapped[float | None] = mapped_column(TipoTasaColumna, nullable=True)
 
     total_intereses: Mapped[float] = mapped_column(TipoMonto, nullable=False, default=0)

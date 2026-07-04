@@ -1,25 +1,17 @@
 """Datos semilla para ejecucion local (idempotente)."""
 
-from datetime import date
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
 from app.database import FabricaSesion, crear_tablas
-from app.esquemas.simulacion import SimulacionGuardarRequest
-from app.modelos.enumeraciones import Capitalizacion, EstadoSimulacion, Moneda, Plan, TipoTasa
-from app.modelos.simulacion import Simulacion
+from app.modelos.enumeraciones import Moneda
 from app.modelos.usuario import Usuario
 from app.modelos.vehiculo import Vehiculo
 from app.seguridad.hash import hashear_password
-from app.servicios.servicio_gestion_simulacion import (
-    aplicar_resultado_a_modelo,
-    calcular_desde_solicitud,
-    construir_filas_cronograma,
-)
 
 
-# Vehiculos de ejemplo (cada usuario recibe su propia copia).
+# Catalogo de vehiculos de ejemplo, compartido por todos los usuarios.
 _VEHICULOS = [
     {
         "marca": "Toyota", "modelo": "Corolla Cross", "version": "XLI", "anio": 2026,
@@ -66,80 +58,27 @@ _VEHICULOS = [
 ]
 
 
-def _crear_usuarios(sesion: Session) -> tuple[Usuario, Usuario]:
-    """Crea los usuarios de prueba y devuelve (demo, maria)."""
+def _crear_usuarios(sesion: Session) -> None:
+    """Crea las cuentas de prueba (se inicia sesion con el correo)."""
 
-    demo = Usuario(
-        nombre="Usuario",
-        apellido="Demo",
-        correo="demo@autofacil.local",
-        usuario="demo",
-        password_hash=hashear_password("Demo1234"),
-        activo=True,
+    sesion.add_all(
+        [
+            Usuario(
+                nombre="Usuario",
+                apellido="Demo",
+                correo="demo@gmail.com",
+                password_hash=hashear_password("Demo1234"),
+                activo=True,
+            ),
+            Usuario(
+                nombre="Maria",
+                apellido="Perez",
+                correo="maria@gmail.com",
+                password_hash=hashear_password("Maria1234"),
+                activo=True,
+            ),
+        ]
     )
-    maria = Usuario(
-        nombre="Maria",
-        apellido="Perez",
-        correo="maria@autofacil.local",
-        usuario="maria",
-        password_hash=hashear_password("Maria1234"),
-        activo=True,
-    )
-    sesion.add_all([demo, maria])
-    sesion.flush()
-    return demo, maria
-
-
-def _crear_vehiculos(sesion: Session, usuario_id: int) -> None:
-    """Crea los vehiculos de ejemplo del usuario indicado."""
-
-    sesion.add_all([Vehiculo(usuario_id=usuario_id, **fila) for fila in _VEHICULOS])
-
-
-def _crear_simulacion_demo(sesion: Session, usuario: Usuario) -> None:
-    """Crea una simulacion de Compra Inteligente de ejemplo para el usuario."""
-
-    vehiculo = (
-        sesion.query(Vehiculo)
-        .filter(Vehiculo.usuario_id == usuario.id, Vehiculo.moneda == Moneda.SOLES)
-        .first()
-    )
-    if vehiculo is None:
-        return
-
-    solicitud = SimulacionGuardarRequest(
-        vehiculo_id=vehiculo.id,
-        nombre="Compra Inteligente - demostracion",
-        moneda=vehiculo.moneda,
-        plan=Plan.PLAN_36,
-        porcentaje_cuota_inicial=Decimal("0.20"),
-        tipo_tasa=TipoTasa.NOMINAL,
-        valor_tasa=Decimal("0.15"),
-        capitalizacion=Capitalizacion.DIARIA,
-        meses_gracia_total=3,
-        meses_gracia_parcial=3,
-        costo_notarial=Decimal("100"),
-        costo_registral=Decimal("75"),
-        gps_periodico=Decimal("20"),
-        portes_periodico=Decimal("3.5"),
-        gastos_adm_periodico=Decimal("3.5"),
-        seguro_desgravamen_mensual=Decimal("0.00049"),
-        seguro_riesgo_anual=Decimal("0.003"),
-        cok_anual=Decimal("0.50"),
-        fecha_inicio=date(2026, 1, 1),
-    )
-    resultado = calcular_desde_solicitud(solicitud, vehiculo)
-    simulacion = Simulacion(
-        codigo="PENDIENTE",
-        vehiculo_id=vehiculo.id,
-        usuario_id=usuario.id,
-        estado=EstadoSimulacion.CALCULADA,
-    )
-    aplicar_resultado_a_modelo(simulacion, solicitud, resultado)
-    sesion.add(simulacion)
-    sesion.flush()
-    simulacion.codigo = f"SIM-{simulacion.id:06d}"
-    simulacion.cronograma = construir_filas_cronograma(resultado)
 
 
 def sembrar_datos(sesion: Session) -> bool:
@@ -147,17 +86,12 @@ def sembrar_datos(sesion: Session) -> bool:
 
     creado = False
 
-    demo = sesion.query(Usuario).filter(Usuario.usuario == "demo").first()
-    maria = sesion.query(Usuario).filter(Usuario.usuario == "maria").first()
     if sesion.query(Usuario).first() is None:
-        demo, maria = _crear_usuarios(sesion)
+        _crear_usuarios(sesion)
         creado = True
 
-    if demo is not None and maria is not None and sesion.query(Vehiculo).first() is None:
-        _crear_vehiculos(sesion, demo.id)
-        _crear_vehiculos(sesion, maria.id)
-        sesion.flush()
-        _crear_simulacion_demo(sesion, demo)
+    if sesion.query(Vehiculo).first() is None:
+        sesion.add_all([Vehiculo(**fila) for fila in _VEHICULOS])
         creado = True
 
     if creado:

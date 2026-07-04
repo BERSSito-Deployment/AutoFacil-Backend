@@ -2,11 +2,7 @@
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.esquemas.comunes import (
-    validar_correo_obligatorio,
-    validar_password_bcrypt,
-    validar_usuario,
-)
+from app.esquemas.comunes import validar_correo_obligatorio, validar_password_bcrypt
 
 
 class TokenRespuesta(BaseModel):
@@ -17,36 +13,30 @@ class TokenRespuesta(BaseModel):
 
 
 class CredencialesLogin(BaseModel):
-    """Credenciales aceptadas por el inicio de sesion en formato JSON."""
+    """Credenciales del inicio de sesion: correo y contrasena."""
 
-    usuario: str = Field(..., description="Nombre de usuario o correo")
+    correo: str = Field(..., max_length=180)
     password: str
 
     model_config = {
         "json_schema_extra": {
-            "examples": [{"usuario": "admin", "password": "Admin123"}]
+            "examples": [{"correo": "demo@gmail.com", "password": "Demo1234"}]
         }
     }
 
 
 class RegistroRequest(BaseModel):
-    """Datos para el registro publico de un nuevo usuario del sistema."""
+    """Datos para el registro publico de un nuevo usuario."""
 
     nombre: str = Field(..., min_length=1, max_length=120)
     apellido: str = Field(..., min_length=1, max_length=120)
     correo: str = Field(..., max_length=180)
-    usuario: str = Field(..., min_length=3, max_length=60)
     password: str = Field(..., min_length=6, max_length=128)
 
     @field_validator("correo")
     @classmethod
     def _validar_correo(cls, valor: str) -> str:
         return validar_correo_obligatorio(valor)
-
-    @field_validator("usuario")
-    @classmethod
-    def _validar_usuario(cls, valor: str) -> str:
-        return validar_usuario(valor)
 
     @field_validator("password")
     @classmethod
@@ -66,8 +56,7 @@ class RegistroRequest(BaseModel):
                 {
                     "nombre": "Lucia",
                     "apellido": "Garcia",
-                    "correo": "lucia.garcia@autofacil.local",
-                    "usuario": "lgarcia",
+                    "correo": "lucia.garcia@gmail.com",
                     "password": "Clave123",
                 }
             ]

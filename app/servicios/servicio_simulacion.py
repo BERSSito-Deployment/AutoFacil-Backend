@@ -17,7 +17,6 @@ from app.utilidades.decimales import (
     DIAS_PERIODO,
     UNO,
     a_decimal,
-    potencia,
     redondear_moneda,
     redondear_tasa,
 )
@@ -115,7 +114,6 @@ class ResultadoSimulacion:
     cok_mensual: Decimal
     van: Decimal
     tir_mensual: Decimal | None
-    tir_anual: Decimal | None
     tcea: Decimal | None
     total_intereses: Decimal
     total_amortizado: Decimal
@@ -256,11 +254,8 @@ def calcular_simulacion(entrada: EntradaSimulacion) -> ResultadoSimulacion:
 
     # TIR: la tasa mensual real de la operacion (la que hace que el VAN sea cero).
     tir_mensual = servicio_van_tir.calcular_tir(flujos)
-    tir_anual = (
-        potencia(UNO + tir_mensual, periodos_anio) - UNO if tir_mensual is not None else None
-    )
-    # TCEA: el costo real anual del credito. Resume en una sola tasa todo lo que se
-    # paga (intereses + seguros + cargos), asi se puede comparar entre creditos.
+    # TCEA: el costo real anual del credito. Es la TIR llevada a un anio y resume
+    # todo lo que se paga (intereses + seguros + cargos) en una sola tasa.
     _, tcea = calcular_tcea(flujos, periodos_anio)
 
     return ResultadoSimulacion(
@@ -295,7 +290,6 @@ def calcular_simulacion(entrada: EntradaSimulacion) -> ResultadoSimulacion:
         cok_mensual=cok_mensual,
         van=van,
         tir_mensual=tir_mensual,
-        tir_anual=tir_anual,
         tcea=tcea,
         total_intereses=cronograma.total_intereses,
         total_amortizado=cronograma.total_amortizado,
@@ -377,9 +371,6 @@ def redondear_resultado(resultado: ResultadoSimulacion) -> dict:
         "van": redondear_moneda(resultado.van),
         "tir_mensual": (
             redondear_tasa(resultado.tir_mensual) if resultado.tir_mensual is not None else None
-        ),
-        "tir_anual": (
-            redondear_tasa(resultado.tir_anual) if resultado.tir_anual is not None else None
         ),
         "tcea": redondear_tasa(resultado.tcea) if resultado.tcea is not None else None,
         "total_intereses": redondear_moneda(resultado.total_intereses),
