@@ -62,6 +62,20 @@ class Configuracion(BaseSettings):
     def _validar_url_base_datos(cls, url: str) -> str:
         return normalizar_url_base_datos(url)
 
+    @field_validator("origenes_cors", mode="before")
+    @classmethod
+    def _validar_origenes_cors(cls, valores: str | list[str]) -> list[str]:
+        if isinstance(valores, str):
+            import json
+            try:
+                res = json.loads(valores)
+                if isinstance(res, list):
+                    return [str(v).strip() for v in res]
+            except json.JSONDecodeError:
+                pass
+            return [v.strip() for v in valores.split(",") if v.strip()]
+        return valores
+
 
 @lru_cache
 def obtener_configuracion() -> Configuracion:
