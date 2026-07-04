@@ -156,7 +156,6 @@ class IndicadoresSimulacion(BaseModel):
     cok_mensual: float
     van: float
     tir_mensual: float | None
-    tir_anual: float | None
     tcea: float | None
     total_intereses: float
     total_amortizado: float
@@ -230,7 +229,6 @@ class SimulacionRespuesta(BaseModel):
     cok_mensual: float
     van: float
     tir_mensual: float | None
-    tir_anual: float | None
     tcea: float | None
     total_intereses: float
     total_amortizado: float

@@ -163,9 +163,6 @@ def aplicar_resultado_a_modelo(
     simulacion.tir_mensual = (
         redondear_tasa(resultado.tir_mensual) if resultado.tir_mensual is not None else None
     )
-    simulacion.tir_anual = (
-        redondear_tasa(resultado.tir_anual) if resultado.tir_anual is not None else None
-    )
     simulacion.tcea = redondear_tasa(resultado.tcea) if resultado.tcea is not None else None
     simulacion.total_intereses = redondear_moneda(resultado.total_intereses)
     simulacion.total_amortizado = redondear_moneda(resultado.total_amortizado)

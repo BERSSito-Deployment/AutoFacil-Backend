@@ -9,19 +9,21 @@ from app.config import obtener_configuracion
 
 configuracion = obtener_configuracion()
 
-usa_sqlite = configuracion.url_base_datos.startswith("sqlite")
-argumentos_conexion = {"check_same_thread": False} if usa_sqlite else {}
+argumentos_conexion = (
+    {"check_same_thread": False}
+    if configuracion.url_base_datos.startswith("sqlite")
+    else {}
+)
 
 motor = create_engine(
     configuracion.url_base_datos,
     connect_args=argumentos_conexion,
     echo=False,
-    pool_pre_ping=True,
 )
 
 
 # Activa las claves foraneas en SQLite (para el borrado en cascada).
-if usa_sqlite:
+if configuracion.url_base_datos.startswith("sqlite"):
 
     @event.listens_for(motor, "connect")
     def _activar_foreign_keys(conexion, _registro):  # noqa: ANN001
@@ -47,8 +49,8 @@ def obtener_sesion() -> Generator[Session, None, None]:
         sesion.close()
 
 
-def _sincronizar_esquema_sqlite() -> None:
-    """Deja la base SQLite alineada con los modelos actuales.
+def _sincronizar_esquema() -> None:
+    """Deja la base de datos alineada con los modelos actuales.
 
     SQLite no altera tablas ya creadas, asi que si el codigo cambio (columnas
     nuevas o quitadas) los INSERT empiezan a fallar. Aqui se compara cada tabla
@@ -83,6 +85,5 @@ def crear_tablas() -> None:
 
     from app import modelos  # noqa: F401
 
-    if usa_sqlite:
-        _sincronizar_esquema_sqlite()
+    _sincronizar_esquema()
     Base.metadata.create_all(bind=motor)

@@ -15,7 +15,7 @@ class Usuario(Base, MarcasTiempoMixin):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     nombre: Mapped[str] = mapped_column(String(120), nullable=False)
     apellido: Mapped[str] = mapped_column(String(120), nullable=False)
+    # El correo es la identidad con la que se inicia sesion.
     correo: Mapped[str] = mapped_column(String(180), unique=True, nullable=False, index=True)
-    usuario: Mapped[str] = mapped_column(String(60), unique=True, nullable=False, index=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     activo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

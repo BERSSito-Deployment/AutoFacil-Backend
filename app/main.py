@@ -30,15 +30,15 @@ ETIQUETAS_OPENAPI = [
     {
         "name": "Perfil",
         "description": (
-            "Consulta y actualizacion del perfil del propio usuario (nombre, correo, "
-            "usuario y contrasena). Cambiar el usuario no invalida la sesion."
+            "Consulta y actualizacion del perfil del propio usuario (nombre, apellido, "
+            "correo y contrasena)."
         ),
     },
     {
         "name": "Vehiculos",
         "description": (
-            "Vehiculos que el usuario registra para simular su financiamiento: alta, "
-            "busqueda, edicion y baja logica."
+            "Catalogo de vehiculos compartido por todos los usuarios: alta, busqueda, "
+            "edicion y baja logica."
         ),
     },
     {
@@ -61,8 +61,8 @@ ETIQUETAS_OPENAPI = [
 
 DESCRIPCION_API = """
 API del sistema **AutoFacil**: cualquier persona crea una cuenta y simula el
-credito de su auto. Cada usuario trabaja de forma aislada sobre sus propios
-vehiculos y sus simulaciones.
+credito de su auto. El catalogo de vehiculos es compartido; las simulaciones
+son privadas de cada usuario.
 
 ### Producto
 
@@ -77,9 +77,8 @@ intermedios.
 
 ### Autenticacion
 
-1. Cree una cuenta en `POST /auth/registro`. En desarrollo local tambien puede
-   usar una cuenta de prueba si los datos semilla estan activos (`demo` /
-   `Demo1234`).
+1. Cree una cuenta en `POST /auth/registro` o use la cuenta de prueba
+   (`demo@gmail.com` / `Demo1234`).
 2. Obtenga el token con `POST /auth/login-json` (o el formulario `POST /auth/login`).
 3. Pulse **Authorize** arriba a la derecha y pegue el token para autorizar las
    llamadas a los endpoints protegidos.
@@ -100,14 +99,13 @@ async def ciclo_vida(_: FastAPI):
     """Inicializa la base de datos y los datos semilla al arrancar el servicio."""
 
     crear_tablas()
-    if configuracion.sembrar_datos_inicio:
-        from app.datos_semilla import sembrar_datos
+    from app.datos_semilla import sembrar_datos
 
-        sesion = FabricaSesion()
-        try:
-            sembrar_datos(sesion)
-        finally:
-            sesion.close()
+    sesion = FabricaSesion()
+    try:
+        sembrar_datos(sesion)
+    finally:
+        sesion.close()
     yield
 
 

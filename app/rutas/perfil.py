@@ -38,16 +38,6 @@ def actualizar_perfil(
             raise error_conflicto("El correo ya esta registrado por otro usuario.")
         usuario_actual.correo = datos.correo
 
-    if datos.usuario and datos.usuario != usuario_actual.usuario:
-        existe = (
-            sesion.query(Usuario)
-            .filter(Usuario.usuario == datos.usuario, Usuario.id != usuario_actual.id)
-            .first()
-        )
-        if existe is not None:
-            raise error_conflicto("El nombre de usuario ya esta en uso.")
-        usuario_actual.usuario = datos.usuario
-
     if datos.nombre:
         usuario_actual.nombre = datos.nombre
     if datos.apellido:

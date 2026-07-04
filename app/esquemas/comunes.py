@@ -53,26 +53,6 @@ def validar_correo_obligatorio(valor: str | None) -> str:
     return valor
 
 
-def validar_usuario(valor: str) -> str:
-    """Normaliza y valida un nombre de usuario de inicio de sesion.
-
-    Recorta espacios y rechaza valores vacios o puramente numericos (estos
-    ultimos generan ambiguedad con identificadores internos). El nombre de
-    usuario se conserva tal cual, sin pasar a minusculas, salvo el recorte.
-    """
-
-    if valor is None:
-        raise ValueError("El nombre de usuario es obligatorio.")
-    valor = valor.strip()
-    if valor == "":
-        raise ValueError("El nombre de usuario es obligatorio.")
-    if valor.isdigit():
-        raise ValueError("El nombre de usuario no puede ser solo numeros.")
-    if "@" in valor:
-        raise ValueError("El nombre de usuario no puede contener '@'.")
-    return valor
-
-
 def validar_password_bcrypt(valor: str) -> str:
     """Valida que la contrasena no exceda el limite de 72 bytes de bcrypt.
 

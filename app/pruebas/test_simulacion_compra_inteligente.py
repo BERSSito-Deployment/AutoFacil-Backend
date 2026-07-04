@@ -92,10 +92,11 @@ def test_simulacion_indicadores_presentes():
 
     resultado = calcular_simulacion(_entrada_base())
     assert resultado.van is not None
-    assert resultado.tir_mensual is not None and resultado.tir_anual is not None
+    assert resultado.tir_mensual is not None
     assert resultado.tcea is not None
-    # La TCEA equivale a la TIR anualizada del flujo de costos del deudor.
-    assert abs(resultado.tcea - resultado.tir_anual) < Decimal("1e-9")
+    # La TCEA es la TIR mensual llevada a un anio.
+    esperado = (Decimal("1") + resultado.tir_mensual) ** 12 - Decimal("1")
+    assert abs(resultado.tcea - esperado) < Decimal("1e-9")
     # Con seguros y gastos, la TCEA debe superar a la TEA del credito.
     assert resultado.tcea > resultado.tea_equivalente
 

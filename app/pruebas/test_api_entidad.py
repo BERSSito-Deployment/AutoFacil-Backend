@@ -1,9 +1,9 @@
 """Pruebas de API con una base de datos aislada.
 
 Usa un motor SQLite temporal y sobreescribe la dependencia de sesion para no
-tocar la base de datos de desarrollo. Cubre autenticacion, aislamiento de datos
-por usuario (cada uno ve solo lo suyo), validaciones de negocio, tipo de cambio
-y el credito Compra Inteligente.
+tocar la base de datos de desarrollo. Cubre autenticacion por correo, catalogo
+compartido, simulaciones aisladas por usuario, validaciones de negocio, tipo de
+cambio y el credito Compra Inteligente.
 """
 
 import os
@@ -40,33 +40,27 @@ cliente = TestClient(app)
 
 @pytest.fixture(scope="module", autouse=True)
 def preparar_datos():
-    """Crea el esquema y dos usuarios con vehiculos propios y aislados."""
+    """Crea el esquema, dos usuarios y el catalogo compartido de vehiculos."""
 
     Base.metadata.drop_all(_motor)
     Base.metadata.create_all(_motor)
     sesion = SesionPrueba()
-    uno = Usuario(
-        nombre="Usuario", apellido="Uno", correo="usuario1@autofacil.local",
-        usuario="usuario1", password_hash=hashear_password("Clave123"), activo=True,
-    )
-    dos = Usuario(
-        nombre="Usuario", apellido="Dos", correo="usuario2@autofacil.local",
-        usuario="usuario2", password_hash=hashear_password("Clave456"), activo=True,
-    )
-    sesion.add_all([uno, dos])
-    sesion.flush()
     sesion.add_all(
         [
-            # Vehiculos del usuario 1.
-            Vehiculo(usuario_id=uno.id, marca="Toyota", modelo="Yaris", anio=2026,
+            Usuario(
+                nombre="Usuario", apellido="Uno", correo="usuario1@autofacil.local",
+                password_hash=hashear_password("Clave123"), activo=True,
+            ),
+            Usuario(
+                nombre="Usuario", apellido="Dos", correo="usuario2@autofacil.local",
+                password_hash=hashear_password("Clave456"), activo=True,
+            ),
+            Vehiculo(marca="Toyota", modelo="Yaris", anio=2026,
                      precio=80000, moneda=Moneda.SOLES, activo=True),
-            Vehiculo(usuario_id=uno.id, marca="Hyundai", modelo="Tucson", anio=2026,
+            Vehiculo(marca="Hyundai", modelo="Tucson", anio=2026,
                      precio=35000, moneda=Moneda.DOLARES, activo=True),
-            Vehiculo(usuario_id=uno.id, marca="Kia", modelo="Rio", anio=2024,
+            Vehiculo(marca="Kia", modelo="Rio", anio=2024,
                      precio=60000, moneda=Moneda.SOLES, activo=False),
-            # Vehiculo del usuario 2 (no debe verse desde el usuario 1).
-            Vehiculo(usuario_id=dos.id, marca="Ford", modelo="Ranger", anio=2026,
-                     precio=120000, moneda=Moneda.SOLES, activo=True),
         ]
     )
     sesion.commit()
@@ -78,18 +72,18 @@ def preparar_datos():
         os.remove(_RUTA)
 
 
-def _token(usuario: str, password: str) -> str:
+def _token(correo: str, password: str) -> str:
     return cliente.post(
-        "/auth/login-json", json={"usuario": usuario, "password": password}
+        "/auth/login-json", json={"correo": correo, "password": password}
     ).json()["access_token"]
 
 
 def _headers() -> dict:
-    return {"Authorization": f"Bearer {_token('usuario1', 'Clave123')}"}
+    return {"Authorization": f"Bearer {_token('usuario1@autofacil.local', 'Clave123')}"}
 
 
 def _headers2() -> dict:
-    return {"Authorization": f"Bearer {_token('usuario2', 'Clave456')}"}
+    return {"Authorization": f"Bearer {_token('usuario2@autofacil.local', 'Clave456')}"}
 
 
 def _ids():
@@ -204,12 +198,15 @@ def test_simulacion_valida_saldo_cero_e_indicadores():
     assert "saldo_financiado" in sim
 
 
-def test_aislamiento_por_usuario():
-    """Cada usuario solo ve sus vehiculos y sus simulaciones."""
+def test_catalogo_compartido_y_simulaciones_aisladas():
+    """El catalogo es el mismo para todos; las simulaciones son de cada usuario."""
 
     h1, veh = _ids()
-    # El usuario 1 no ve el "Ford Ranger" del usuario 2.
-    assert all(v["marca"] != "Ford" for v in veh)
+    # Ambos usuarios ven el mismo catalogo.
+    veh2 = cliente.get(
+        "/vehiculos", params={"incluir_inactivos": True}, headers=_headers2()
+    ).json()
+    assert {v["id"] for v in veh} == {v["id"] for v in veh2}
 
     # El usuario 1 crea una simulacion.
     sim = _crear_sim(h1, veh).json()
@@ -241,36 +238,19 @@ def test_registro_correo_obligatorio_y_normalizado():
 
     vacio = cliente.post(
         "/auth/registro",
-        json={"nombre": "A", "apellido": "B", "correo": "  ", "usuario": "sincorreo", "password": "Clave123"},
+        json={"nombre": "A", "apellido": "B", "correo": "  ", "password": "Clave123"},
     )
     assert vacio.status_code == 422
     ok = cliente.post(
         "/auth/registro",
         json={"nombre": "Carla", "apellido": "Diaz", "correo": "Carla.DIAZ@Mail.com",
-              "usuario": "cdiaz", "password": "Clave123"},
+              "password": "Clave123"},
     )
     assert ok.status_code == 200
     login = cliente.post(
-        "/auth/login-json", json={"usuario": "carla.diaz@mail.com", "password": "Clave123"}
+        "/auth/login-json", json={"correo": "carla.diaz@mail.com", "password": "Clave123"}
     )
     assert login.status_code == 200
-
-
-def test_registro_usuario_invalido():
-    """Rechaza nombres de usuario solo numericos o con '@'."""
-
-    numerico = cliente.post(
-        "/auth/registro",
-        json={"nombre": "N", "apellido": "U", "correo": "num@mail.com",
-              "usuario": "12345", "password": "Clave123"},
-    )
-    assert numerico.status_code == 422
-    con_arroba = cliente.post(
-        "/auth/registro",
-        json={"nombre": "N", "apellido": "U", "correo": "arroba@mail.com",
-              "usuario": "otro@mail.com", "password": "Clave123"},
-    )
-    assert con_arroba.status_code == 422
 
 
 def test_password_excede_72_bytes():
@@ -279,7 +259,7 @@ def test_password_excede_72_bytes():
     r = cliente.post(
         "/auth/registro",
         json={"nombre": "L", "apellido": "P", "correo": "larga@mail.com",
-              "usuario": "larga", "password": "a" * 73},
+              "password": "a" * 73},
     )
     assert r.status_code == 422
 
@@ -323,22 +303,49 @@ def test_perfil_password_larga_rechazada():
     assert r.status_code == 422
 
 
-def test_perfil_cambia_usuario_y_token_sigue_valido():
-    """Cambiar el nombre de usuario no invalida la sesion (token por id)."""
+def test_perfil_cambio_de_contrasena_funciona():
+    """Cambiar la contrasena exige la actual y permite entrar con la nueva."""
 
     reg = cliente.post(
         "/auth/registro",
-        json={"nombre": "Pa", "apellido": "Pe", "correo": "pa@mail.com",
-              "usuario": "paco", "password": "Clave123"},
+        json={"nombre": "Pa", "apellido": "Pe", "correo": "pa@mail.com", "password": "Clave123"},
     )
     assert reg.status_code == 200
     h = {"Authorization": f"Bearer {reg.json()['access_token']}"}
-    assert cliente.put("/perfil", json={"usuario": "paco2"}, headers=h).status_code == 200
-    assert cliente.get("/auth/me", headers=h).json()["usuario"] == "paco2"
+    # Sin la contrasena actual correcta se rechaza.
+    mal = cliente.put(
+        "/perfil", json={"password_actual": "Incorrecta", "password_nueva": "Nueva1234"}, headers=h
+    )
+    assert mal.status_code == 400
+    # Con la actual correcta, se cambia y el login funciona con la nueva.
+    ok = cliente.put(
+        "/perfil", json={"password_actual": "Clave123", "password_nueva": "Nueva1234"}, headers=h
+    )
+    assert ok.status_code == 200
     assert cliente.post(
-        "/auth/login-json", json={"usuario": "paco2", "password": "Clave123"}
+        "/auth/login-json", json={"correo": "pa@mail.com", "password": "Clave123"}
+    ).status_code == 401
+    assert cliente.post(
+        "/auth/login-json", json={"correo": "pa@mail.com", "password": "Nueva1234"}
     ).status_code == 200
-    assert cliente.put("/perfil", json={"usuario": "usuario1"}, headers=h).status_code == 409
+
+
+def test_primera_simulacion_de_cada_usuario_es_la_numero_uno():
+    """El codigo es correlativo por usuario: la primera siempre es SIM-000001."""
+
+    reg = cliente.post(
+        "/auth/registro",
+        json={"nombre": "Nu", "apellido": "Evo", "correo": "nuevo@mail.com", "password": "Clave123"},
+    )
+    h = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    veh = cliente.get("/vehiculos", headers=h).json()
+    r = cliente.post(
+        "/simulaciones",
+        json={**_solicitud_base(_veh_pen(veh)["id"]), "estado": "CALCULADA"},
+        headers=h,
+    )
+    assert r.status_code == 201
+    assert r.json()["codigo"] == "SIM-000001"
 
 
 def test_recalcular_reproduce_resultado():
