@@ -1,9 +1,6 @@
-"""Rutas de autenticacion: login, registro y perfil del usuario."""
-
 from fastapi import APIRouter, Depends
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-
 from app.database import obtener_sesion
 from app.esquemas.auth import (
     CredencialesLogin,
@@ -21,8 +18,6 @@ enrutador = APIRouter(prefix="/auth", tags=["Autenticacion"])
 
 
 def _autenticar(sesion: Session, correo: str, password: str) -> Usuario:
-    """Valida el correo y la contrasena y devuelve el usuario autenticado."""
-
     correo = (correo or "").strip().lower()
     usuario = sesion.query(Usuario).filter(Usuario.correo == correo).first()
     if usuario is None or not verificar_password(password, usuario.password_hash):
@@ -35,14 +30,13 @@ def _autenticar(sesion: Session, correo: str, password: str) -> Usuario:
 @enrutador.post(
     "/login",
     response_model=TokenRespuesta,
-    summary="Iniciar sesion (formulario OAuth2)",
+    summary="Iniciar sesion",
 )
 def login(
     datos: OAuth2PasswordRequestForm = Depends(),
     sesion: Session = Depends(obtener_sesion),
 ) -> TokenRespuesta:
-    """Inicia sesion por formulario OAuth2 (el correo va en `username`)."""
-
+    
     usuario = _autenticar(sesion, datos.username, datos.password)
     token = crear_token_acceso(str(usuario.id))
     return TokenRespuesta(access_token=token)
@@ -51,13 +45,12 @@ def login(
 @enrutador.post(
     "/login-json",
     response_model=TokenRespuesta,
-    summary="Iniciar sesion (cuerpo JSON)",
+    summary="Iniciar sesion",
 )
 def login_json(
     credenciales: CredencialesLogin,
     sesion: Session = Depends(obtener_sesion),
 ) -> TokenRespuesta:
-    """Inicia sesion con correo y contrasena."""
 
     usuario = _autenticar(sesion, credenciales.correo, credenciales.password)
     token = crear_token_acceso(str(usuario.id))
@@ -73,8 +66,6 @@ def registro(
     datos: RegistroRequest,
     sesion: Session = Depends(obtener_sesion),
 ) -> TokenRespuesta:
-    """Crea la cuenta y devuelve el token para entrar de inmediato."""
-
     duplicado = sesion.query(Usuario).filter(Usuario.correo == datos.correo).first()
     if duplicado is not None:
         raise error_conflicto("El correo ya esta registrado.")
@@ -95,6 +86,5 @@ def registro(
 
 @enrutador.get("/me", response_model=UsuarioRespuesta, summary="Perfil del usuario autenticado")
 def perfil_actual(usuario_actual: Usuario = Depends(obtener_usuario_actual)) -> Usuario:
-    """Devuelve los datos del usuario autenticado."""
 
     return usuario_actual

@@ -1,9 +1,6 @@
-"""Rutas del catalogo de vehiculos, compartido por todos los usuarios."""
-
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
-
 from app.database import obtener_sesion
 from app.esquemas.vehiculo import VehiculoActualizar, VehiculoCrear, VehiculoRespuesta
 from app.modelos.usuario import Usuario
@@ -15,10 +12,8 @@ enrutador = APIRouter(prefix="/vehiculos", tags=["Vehiculos"])
 
 
 def _obtener(sesion: Session, vehiculo_id: int) -> Vehiculo:
-    """Obtiene un vehiculo del catalogo o lanza 404 si no existe."""
-
     vehiculo = sesion.get(Vehiculo, vehiculo_id)
-    if vehiculo is None:
+    if vehiculo is None or not vehiculo.activo:
         raise error_no_encontrado("El vehiculo indicado no existe.")
     return vehiculo
 
@@ -26,15 +21,10 @@ def _obtener(sesion: Session, vehiculo_id: int) -> Vehiculo:
 @enrutador.get("", response_model=list[VehiculoRespuesta], summary="Listar y buscar vehiculos")
 def listar_vehiculos(
     busqueda: str | None = Query(default=None),
-    incluir_inactivos: bool = Query(default=False),
     sesion: Session = Depends(obtener_sesion),
     _: Usuario = Depends(obtener_usuario_actual),
 ) -> list[Vehiculo]:
-    """Lista el catalogo con busqueda por marca, modelo o version."""
-
-    consulta = sesion.query(Vehiculo)
-    if not incluir_inactivos:
-        consulta = consulta.filter(Vehiculo.activo.is_(True))
+    consulta = sesion.query(Vehiculo).filter(Vehiculo.activo.is_(True))
     if busqueda:
         patron = f"%{busqueda}%"
         consulta = consulta.filter(
@@ -53,7 +43,6 @@ def obtener_vehiculo(
     sesion: Session = Depends(obtener_sesion),
     _: Usuario = Depends(obtener_usuario_actual),
 ) -> Vehiculo:
-    """Obtiene el detalle de un vehiculo del catalogo."""
 
     return _obtener(sesion, vehiculo_id)
 
@@ -69,7 +58,6 @@ def crear_vehiculo(
     sesion: Session = Depends(obtener_sesion),
     _: Usuario = Depends(obtener_usuario_actual),
 ) -> Vehiculo:
-    """Agrega un vehiculo al catalogo comun."""
 
     vehiculo = Vehiculo(**datos.model_dump())
     sesion.add(vehiculo)
@@ -85,8 +73,6 @@ def actualizar_vehiculo(
     sesion: Session = Depends(obtener_sesion),
     _: Usuario = Depends(obtener_usuario_actual),
 ) -> Vehiculo:
-    """Actualiza parcialmente los datos de un vehiculo del catalogo."""
-
     vehiculo = _obtener(sesion, vehiculo_id)
     for campo, valor in datos.model_dump(exclude_unset=True).items():
         setattr(vehiculo, campo, valor)
@@ -98,15 +84,13 @@ def actualizar_vehiculo(
 @enrutador.delete(
     "/{vehiculo_id}",
     response_model=VehiculoRespuesta,
-    summary="Desactivar un vehiculo (baja logica)",
+    summary="Quitar un vehiculo",
 )
-def desactivar_vehiculo(
+def quitar_vehiculo(
     vehiculo_id: int,
     sesion: Session = Depends(obtener_sesion),
     _: Usuario = Depends(obtener_usuario_actual),
 ) -> Vehiculo:
-    """Oculta un vehiculo del catalogo sin borrar su historial."""
-
     vehiculo = _obtener(sesion, vehiculo_id)
     vehiculo.activo = False
     sesion.commit()

@@ -1,9 +1,7 @@
-"""Datos semilla para ejecucion local (idempotente)."""
+# para ejecucion y pruebas locales
 
 from decimal import Decimal
-
 from sqlalchemy.orm import Session
-
 from app.database import FabricaSesion, crear_tablas
 from app.modelos.enumeraciones import Moneda
 from app.modelos.usuario import Usuario
@@ -11,7 +9,6 @@ from app.modelos.vehiculo import Vehiculo
 from app.seguridad.hash import hashear_password
 
 
-# Catalogo de vehiculos de ejemplo, compartido por todos los usuarios.
 _VEHICULOS = [
     {
         "marca": "Toyota", "modelo": "Corolla Cross", "version": "XLI", "anio": 2026,
@@ -59,8 +56,6 @@ _VEHICULOS = [
 
 
 def _crear_usuarios(sesion: Session) -> None:
-    """Crea las cuentas de prueba (se inicia sesion con el correo)."""
-
     sesion.add_all(
         [
             Usuario(
@@ -82,8 +77,6 @@ def _crear_usuarios(sesion: Session) -> None:
 
 
 def sembrar_datos(sesion: Session) -> bool:
-    """Inserta los datos semilla que falten. Devuelve True si inserto algo."""
-
     creado = False
 
     if sesion.query(Usuario).first() is None:
@@ -100,7 +93,6 @@ def sembrar_datos(sesion: Session) -> bool:
 
 
 def ejecutar_semilla() -> None:
-    """Punto de entrada para sembrar datos desde la linea de comandos."""
 
     crear_tablas()
     sesion = FabricaSesion()

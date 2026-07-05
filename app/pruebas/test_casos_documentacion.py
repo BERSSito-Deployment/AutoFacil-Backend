@@ -1,13 +1,5 @@
-"""Test maestro: reproduce EXACTO el modelo Excel "Compra Inteligente".
-
-Los valores esperados provienen del modelo del profesor (Plan 36, TNA 15% con
-capitalizacion diaria, gracia 3 meses total + 3 parcial). Si el motor coincide
-con estos numeros, replica fielmente la hoja de calculo.
-"""
-
 from datetime import date
 from decimal import Decimal
-
 from app.modelos.enumeraciones import Capitalizacion, Moneda, Plan, TipoPeriodo, TipoTasa
 from app.servicios.servicio_simulacion import (
     CostoInicial,
@@ -15,10 +7,10 @@ from app.servicios.servicio_simulacion import (
     calcular_simulacion,
 )
 
-# Tolerancias: dos decimales para importes, alta precision para tasas.
 TOL_MONTO = Decimal("0.01")
 TOL_TASA = Decimal("1e-6")
 
+# esta prueba es para comparar si sale igual q el ejemplo
 
 def _entrada_maestra() -> EntradaSimulacion:
     return EntradaSimulacion(
@@ -44,8 +36,6 @@ def _entrada_maestra() -> EntradaSimulacion:
 
 
 def test_indicadores_coinciden_con_el_excel():
-    """TEA, TEM, montos base e indicadores de rentabilidad replican el Excel."""
-
     r = calcular_simulacion(_entrada_maestra())
     assert abs(r.tea_equivalente - Decimal("0.161797946")) < TOL_TASA
     assert abs(r.tem - Decimal("0.012575815")) < TOL_TASA
@@ -62,8 +52,6 @@ def test_indicadores_coinciden_con_el_excel():
 
 
 def test_totales_coinciden_con_el_excel():
-    """Los totales desagregados (transparencia) replican el Excel."""
-
     r = calcular_simulacion(_entrada_maestra())
     assert abs(r.total_intereses - Decimal("2264.74")) < TOL_MONTO
     assert abs(r.total_amortizado - Decimal("15760.44")) < TOL_MONTO
@@ -75,38 +63,34 @@ def test_totales_coinciden_con_el_excel():
 
 
 def test_estructura_cronograma_coincide_con_el_excel():
-    """37 periodos, gracia 3T+3P, cuota final pagada en N+1 y saldos en cero."""
-
     r = calcular_simulacion(_entrada_maestra())
-    assert len(r.filas) == 37  # N=36 cuotas + la cuota final en el periodo 37
+    assert len(r.filas) == 37 
 
-    # Gracia: 3 meses total y luego 3 parcial.
+    # primero 3 meses de gracia total y luego 3 de parcial
     assert [f.tipo_periodo for f in r.filas[:3]] == [TipoPeriodo.GRACIA_TOTAL] * 3
     assert [f.tipo_periodo for f in r.filas[3:6]] == [TipoPeriodo.GRACIA_PARCIAL] * 3
     assert r.filas[6].tipo_periodo == TipoPeriodo.CUOTA_ORDINARIA
 
-    # Periodo 1 (gracia total): la cuota final arranca en su valor presente.
+    # periodo 1 gracia total, la cuota final arranca en su valor presente
     assert abs(r.filas[0].saldo_inicial_cuota_final - Decimal("3959.01")) < TOL_MONTO
     assert abs(r.filas[0].saldo_inicial - Decimal("9015.99")) < TOL_MONTO
     assert abs(r.filas[0].flujo - Decimal("-35.42")) < TOL_MONTO
 
-    # Periodo 7 (primera cuota ordinaria).
+    # periodo 7 primera cuota normal
     assert abs(r.filas[6].cuota - Decimal("379.16")) < TOL_MONTO
     assert abs(r.filas[6].amortizacion - Decimal("256.86")) < TOL_MONTO
     assert abs(r.filas[6].flujo - Decimal("-410.16")) < TOL_MONTO
 
-    # Periodo 37: se paga la cuota final y todo cierra en cero.
+    # periodo 37, se paga la cuota final y todo queda en cero
     ultima = r.filas[-1]
     assert ultima.tipo_periodo == TipoPeriodo.CUOTA_FINAL
     assert abs(ultima.amortizacion_cuota_final - Decimal("6400.00")) < TOL_MONTO
     assert abs(ultima.flujo - Decimal("-6431.00")) < TOL_MONTO
     assert abs(ultima.saldo_final_cuota_final) < TOL_MONTO
-    assert abs(r.filas[35].saldo_final) < TOL_MONTO  # saldo regular en cero en N
+    assert abs(r.filas[35].saldo_final) < TOL_MONTO  
 
 
 def test_plan_24_paga_la_cuota_final_en_periodo_25():
-    """Plan 24: 24 cuotas y cuota final del 50% pagada en el periodo 25."""
-
     entrada = _entrada_maestra()
     entrada.plan = Plan.PLAN_24
     r = calcular_simulacion(entrada)
@@ -119,12 +103,10 @@ def test_plan_24_paga_la_cuota_final_en_periodo_25():
 
 
 def test_costo_en_efectivo_no_eleva_el_prestamo():
-    """Un costo marcado al contado (efectivo) no se suma al prestamo."""
-
     entrada = _entrada_maestra()
     entrada.costo_notarial = CostoInicial(Decimal("100"), False)  # ahora al contado
     r = calcular_simulacion(entrada)
-    # Prestamo = 16000 - 3200 + 75 (solo registrales financiados) = 12875.
+    # prestamo = 16000 - 3200 + 75 (solo registrales se financia con el prestamo) = 12875.
     assert r.monto_prestamo == Decimal("12875")
     assert r.total_costos_efectivo == Decimal("100")
     assert r.total_costos_financiados == Decimal("75")

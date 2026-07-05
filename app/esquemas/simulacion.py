@@ -1,14 +1,9 @@
-"""Esquemas Pydantic de simulaciones (tasas y porcentajes en formato decimal)."""
-
 from datetime import date, datetime
 from decimal import Decimal
-
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-
 from app.esquemas.cronograma import CronogramaFilaRespuesta
 from app.modelos.enumeraciones import (
     Capitalizacion,
-    EstadoSimulacion,
     Moneda,
     Plan,
     TipoTasa,
@@ -16,29 +11,26 @@ from app.modelos.enumeraciones import (
 
 
 class ParametrosFinancieros(BaseModel):
-    """Parametros financieros que condicionan el calculo de una simulacion."""
 
     moneda: Moneda = Moneda.SOLES
     tipo_cambio_referencial: Decimal | None = Field(default=None, ge=0)
-    # Plan 24 y Plan 36 fijan las cuotas; el personalizado las toma de numero_cuotas.
+    # el plan 24 y 36 sirven como un ajuste predeterminado, personalizado las agarra de numero_cuotas
     plan: Plan = Plan.PLAN_36
-    # Meses del credito cuando el plan es personalizado (se ignora en los otros).
+    # si se elige personalizado se saca de aquí:
     numero_cuotas: int | None = Field(default=None, ge=1, le=120)
-    # Anio para las conversiones de tasas: 360 dias (ordinario) o 365 (natural).
+    # año para las conversiones de tasas: 360 dias (ordinario) o 365 (natural)
     dias_anio: int = 360
     porcentaje_cuota_inicial: Decimal = Field(default=Decimal("0.20"), ge=0, le=1)
-    # Cuota final. Si no se envia se usa la sugerida por el plan (40% en Plan 36,
-    # 50% en Plan 24); el usuario puede cambiarla.
+    # cuota final, si el usuario no pone una personalizada se usa la predeterminada por el plan (40% en Plan 36, 50% en Plan 24)
     porcentaje_cuota_final: Decimal | None = Field(default=None, ge=0, lt=1)
     tipo_tasa: TipoTasa = TipoTasa.NOMINAL
     valor_tasa: Decimal = Field(..., ge=0, description="Tasa en formato decimal (0.15 = 15%)")
-    # Obligatoria solo cuando la tasa es nominal (TNA).
+    # solo si la tasa es nominal
     capitalizacion: Capitalizacion | None = None
-    # Gracia al inicio: meses de gracia total y, a continuacion, de gracia parcial.
+    # periodos de gracia, primero va la gracia total y luego la parcial, en la q solo se paga intereses y seguros
     meses_gracia_total: int = Field(default=0, ge=0)
     meses_gracia_parcial: int = Field(default=0, ge=0)
-    # Costos / gastos iniciales: monto y si se financia (entra al prestamo) o se
-    # paga al contado (efectivo).
+    # costos y gastos iniciales, se elige si entra al prestamo o si el usuario lo pagará al contado
     costo_notarial: Decimal = Field(default=Decimal("0"), ge=0)
     costo_notarial_financiado: bool = True
     costo_registral: Decimal = Field(default=Decimal("0"), ge=0)
@@ -49,20 +41,19 @@ class ParametrosFinancieros(BaseModel):
     comision_estudio_financiado: bool = True
     comision_activacion: Decimal = Field(default=Decimal("0"), ge=0)
     comision_activacion_financiado: bool = True
-    # Costos / gastos periodicos (por cuota).
+    # costos periodicos por cuota
     gps_periodico: Decimal = Field(default=Decimal("0"), ge=0)
     portes_periodico: Decimal = Field(default=Decimal("0"), ge=0)
     gastos_adm_periodico: Decimal = Field(default=Decimal("0"), ge=0)
-    # Seguros: desgravamen como % mensual; riesgo (todo riesgo) como % anual del precio.
+    # seguros
     seguro_desgravamen_mensual: Decimal = Field(default=Decimal("0"), ge=0)
     seguro_riesgo_anual: Decimal = Field(default=Decimal("0"), ge=0)
-    # Costo de oportunidad del dinero del usuario (TEA) para el VAN.
+    # coki
     cok_anual: Decimal = Field(default=Decimal("0"), ge=0)
     fecha_inicio: date | None = None
 
     @model_validator(mode="after")
     def validar_reglas(self) -> "ParametrosFinancieros":
-        """Revisa que la tasa, el plan, el anio y la gracia sean coherentes."""
 
         if self.tipo_tasa == TipoTasa.NOMINAL and self.capitalizacion is None:
             raise ValueError("La capitalizacion es obligatoria cuando la tasa es nominal.")
@@ -77,8 +68,6 @@ class ParametrosFinancieros(BaseModel):
 
 
 class SimulacionCalcularRequest(ParametrosFinancieros):
-    """Solicitud para calcular una simulacion (con o sin persistencia)."""
-
     vehiculo_id: int
     nombre: str | None = Field(default=None, max_length=150)
 
@@ -114,17 +103,11 @@ class SimulacionCalcularRequest(ParametrosFinancieros):
 
 
 class SimulacionGuardarRequest(SimulacionCalcularRequest):
-    """Solicitud para crear y guardar (o editar) una simulacion calculada."""
-
-    estado: EstadoSimulacion = EstadoSimulacion.CALCULADA
-    # Al editar, conserva el precio original de la propuesta salvo que se pida
-    # explicitamente actualizarlo al precio actual del vehiculo.
+    # se puede actualizar el precio del vehiculo al momento de editar, claro si es que este cambió en primer lugar
     actualizar_precio: bool = False
 
 
 class IndicadoresSimulacion(BaseModel):
-    """Conjunto de montos derivados e indicadores calculados de una simulacion."""
-
     moneda: Moneda
     precio_vehiculo: float
     plan: Plan
@@ -168,14 +151,10 @@ class IndicadoresSimulacion(BaseModel):
 
 
 class ResultadoCalculo(IndicadoresSimulacion):
-    """Resultado del calculo de previsualizacion: indicadores y cronograma."""
-
     cronograma: list[CronogramaFilaRespuesta]
 
 
 class SimulacionRespuesta(BaseModel):
-    """Representacion completa de una simulacion persistida."""
-
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -183,7 +162,6 @@ class SimulacionRespuesta(BaseModel):
     nombre: str | None
     vehiculo_id: int
     usuario_id: int
-    estado: EstadoSimulacion
     moneda: Moneda
     tipo_cambio_referencial: float | None
     fecha_inicio: date
@@ -212,7 +190,7 @@ class SimulacionRespuesta(BaseModel):
     seguro_desgravamen_mensual: float
     seguro_riesgo_anual: float
     cok_anual: float
-    # Resultados derivados.
+    # resultados
     numero_cuotas: int
     dias_anio: int
     porcentaje_cuota_final: float
@@ -243,22 +221,17 @@ class SimulacionRespuesta(BaseModel):
 
 
 class SimulacionDetalle(SimulacionRespuesta):
-    """Simulacion con datos descriptivos y cronograma asociado."""
-
     vehiculo_descripcion: str | None = None
     usuario_nombre: str | None = None
     cronograma: list[CronogramaFilaRespuesta] = []
 
 
 class SimulacionListado(BaseModel):
-    """Resumen de una simulacion para vistas de listado."""
-
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     codigo: str
     nombre: str | None = None
-    estado: EstadoSimulacion
     moneda: Moneda
     plan: Plan
     vehiculo_id: int
@@ -266,7 +239,6 @@ class SimulacionListado(BaseModel):
     monto_prestamo: float
     numero_cuotas: int
     cuota_mensual: float
-    # Lo que realmente sale del bolsillo cada mes: cuota + seguros y cargos.
-    pago_mensual: float
+    pago_mensual: float # pago total, cuota del propio auto + costos adicionales
     tcea: float | None
     fecha_creacion: datetime
