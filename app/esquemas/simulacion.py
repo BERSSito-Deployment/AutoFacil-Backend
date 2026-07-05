@@ -266,5 +266,7 @@ class SimulacionListado(BaseModel):
     monto_prestamo: float
     numero_cuotas: int
     cuota_mensual: float
+    # Lo que realmente sale del bolsillo cada mes: cuota + seguros y cargos.
+    pago_mensual: float
     tcea: float | None
     fecha_creacion: datetime

@@ -233,6 +233,32 @@ def test_busqueda_historial_por_vehiculo():
     assert len(por_vehiculo) >= 1
 
 
+def test_listado_muestra_pago_mensual_total():
+    """El historial muestra lo que se paga al mes, no solo la cuota pura."""
+
+    h, veh = _ids()
+    sim = _crear_sim(
+        h,
+        veh,
+        gps_periodico=20,
+        portes_periodico=3.5,
+        gastos_adm_periodico=3.5,
+        seguro_riesgo_anual=0.003,
+    ).json()
+
+    listado = cliente.get("/simulaciones", headers=h).json()
+    item = next(fila for fila in listado if fila["id"] == sim["id"])
+    esperado = (
+        sim["cuota_mensual"]
+        + sim["seguro_riesgo_periodico"]
+        + sim["gps_periodico"]
+        + sim["portes_periodico"]
+        + sim["gastos_adm_periodico"]
+    )
+    assert item["pago_mensual"] == pytest.approx(esperado, abs=0.01)
+    assert item["pago_mensual"] > item["cuota_mensual"]
+
+
 def test_registro_correo_obligatorio_y_normalizado():
     """El registro rechaza correo vacio y normaliza el correo a minusculas."""
 

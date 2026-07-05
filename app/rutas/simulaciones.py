@@ -113,6 +113,15 @@ def _a_listado(simulacion: Simulacion) -> SimulacionListado:
         monto_prestamo=float(simulacion.monto_prestamo),
         numero_cuotas=simulacion.numero_cuotas,
         cuota_mensual=float(simulacion.cuota_mensual),
+        # Pago real del mes: la cuota mas el seguro de riesgo, GPS, portes y
+        # gastos administrativos de cada periodo.
+        pago_mensual=float(
+            simulacion.cuota_mensual
+            + simulacion.seguro_riesgo_periodico
+            + simulacion.gps_periodico
+            + simulacion.portes_periodico
+            + simulacion.gastos_adm_periodico
+        ),
         tcea=float(simulacion.tcea) if simulacion.tcea is not None else None,
         fecha_creacion=simulacion.fecha_creacion,
     )
