@@ -1,7 +1,4 @@
-"""Modelo ORM de una simulacion de credito vehicular "Compra Inteligente"."""
-
 from datetime import date
-
 from sqlalchemy import (
     Boolean,
     Date,
@@ -25,20 +22,18 @@ from app.modelos.enumeraciones import (
 
 
 class Simulacion(Base, MarcasTiempoMixin):
-    """Resultado completo de una simulacion, junto con sus parametros de entrada."""
 
     __tablename__ = "simulaciones"
-    # El codigo (SIM-000001, ...) es correlativo por usuario: la primera
-    # simulacion de cada cuenta es siempre la numero 1.
+
     __table_args__ = (UniqueConstraint("usuario_id", "codigo"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     codigo: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
-    # Etiqueta opcional para reconocer la simulacion.
+    # por si se le quiere poner nombre a la simulacion
     nombre: Mapped[str | None] = mapped_column(String(150), nullable=True)
 
     vehiculo_id: Mapped[int] = mapped_column(ForeignKey("vehiculos.id"), nullable=False)
-    # Usuario duenio de la simulacion (cada quien ve solo las suyas).
+    # iam de simulaciones, cada usuario ve sus simulaciones y no las de los demas
     usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), nullable=False, index=True)
 
     estado: Mapped[EstadoSimulacion] = mapped_column(
@@ -50,7 +45,6 @@ class Simulacion(Base, MarcasTiempoMixin):
     )
     fecha_inicio: Mapped[date] = mapped_column(Date, nullable=False, default=date.today)
 
-    # --- Parametros de entrada ---
     precio_vehiculo: Mapped[float] = mapped_column(TipoMonto, nullable=False)
     plan: Mapped[Plan] = mapped_column(SqlEnum(Plan), nullable=False)
     porcentaje_cuota_inicial: Mapped[float] = mapped_column(TipoTasaColumna, nullable=False)
@@ -61,13 +55,11 @@ class Simulacion(Base, MarcasTiempoMixin):
         SqlEnum(Capitalizacion), nullable=True
     )
 
-    # Dias del anio usados en las conversiones de tasas (360 ordinario, 365 natural).
     dias_anio: Mapped[int] = mapped_column(Integer, nullable=False, default=360)
 
     meses_gracia_total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     meses_gracia_parcial: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
-    # Costos / gastos iniciales (monto + si se financia o se paga al contado).
     costo_notarial: Mapped[float] = mapped_column(TipoMonto, nullable=False, default=0)
     costo_notarial_financiado: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     costo_registral: Mapped[float] = mapped_column(TipoMonto, nullable=False, default=0)
@@ -81,12 +73,12 @@ class Simulacion(Base, MarcasTiempoMixin):
         Boolean, nullable=False, default=True
     )
 
-    # Costos / gastos periodicos (por cuota).
+    # costos extra por cuota
     gps_periodico: Mapped[float] = mapped_column(TipoMonto, nullable=False, default=0)
     portes_periodico: Mapped[float] = mapped_column(TipoMonto, nullable=False, default=0)
     gastos_adm_periodico: Mapped[float] = mapped_column(TipoMonto, nullable=False, default=0)
 
-    # Seguros: desgravamen mensual y riesgo (todo riesgo) anual, ambos en decimal.
+    # seguros
     seguro_desgravamen_mensual: Mapped[float] = mapped_column(
         TipoTasaColumna, nullable=False, default=0
     )
@@ -94,7 +86,6 @@ class Simulacion(Base, MarcasTiempoMixin):
 
     cok_anual: Mapped[float] = mapped_column(TipoTasaColumna, nullable=False, default=0)
 
-    # --- Resultados derivados ---
     numero_cuotas: Mapped[int] = mapped_column(Integer, nullable=False)
     porcentaje_cuota_final: Mapped[float] = mapped_column(
         TipoTasaColumna, nullable=False, default=0
@@ -125,7 +116,6 @@ class Simulacion(Base, MarcasTiempoMixin):
     total_gastos_adm: Mapped[float] = mapped_column(TipoMonto, nullable=False, default=0)
     monto_total_pagado: Mapped[float] = mapped_column(TipoMonto, nullable=False, default=0)
 
-    # Relaciones de navegacion.
     vehiculo = relationship("Vehiculo")
     usuario = relationship("Usuario")
     cronograma = relationship(

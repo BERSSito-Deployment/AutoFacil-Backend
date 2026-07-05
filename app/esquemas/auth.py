@@ -1,20 +1,13 @@
-"""Esquemas Pydantic para autenticacion y registro de usuarios."""
-
 from pydantic import BaseModel, Field, field_validator
-
 from app.esquemas.comunes import validar_correo_obligatorio, validar_password_bcrypt
 
 
 class TokenRespuesta(BaseModel):
-    """Respuesta entregada tras un inicio de sesion exitoso."""
-
     access_token: str
     token_type: str = "bearer"
 
 
 class CredencialesLogin(BaseModel):
-    """Credenciales del inicio de sesion: correo y contrasena."""
-
     correo: str = Field(..., max_length=180)
     password: str
 
@@ -26,8 +19,6 @@ class CredencialesLogin(BaseModel):
 
 
 class RegistroRequest(BaseModel):
-    """Datos para el registro publico de un nuevo usuario."""
-
     nombre: str = Field(..., min_length=1, max_length=120)
     apellido: str = Field(..., min_length=1, max_length=120)
     correo: str = Field(..., max_length=180)

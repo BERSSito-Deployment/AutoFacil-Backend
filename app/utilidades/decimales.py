@@ -1,5 +1,3 @@
-"""Aritmetica decimal de alta precision (conversiones, potencias, redondeo)."""
-
 from decimal import ROUND_HALF_UP, Context, Decimal, getcontext, localcontext
 
 PRECISION_INTERNA = 50
@@ -7,13 +5,10 @@ getcontext().prec = PRECISION_INTERNA
 
 CERO = Decimal("0")
 UNO = Decimal("1")
-# Cada cuota vence a los 30 dias de la anterior (mes comercial).
 DIAS_PERIODO = Decimal("30")
 
 
 def a_decimal(valor: object) -> Decimal:
-    """Convierte un valor a Decimal de forma segura (los float pasan por texto)."""
-
     if isinstance(valor, Decimal):
         return valor
     if valor is None:
@@ -24,8 +19,6 @@ def a_decimal(valor: object) -> Decimal:
 
 
 def potencia(base: Decimal, exponente: Decimal) -> Decimal:
-    """Eleva base a exponente admitiendo exponentes fraccionarios."""
-
     base = a_decimal(base)
     exponente = a_decimal(exponente)
 
@@ -40,13 +33,9 @@ def potencia(base: Decimal, exponente: Decimal) -> Decimal:
 
 
 def redondear_moneda(valor: object) -> Decimal:
-    """Redondea un importe monetario a dos decimales (redondeo medio hacia arriba)."""
-
     return a_decimal(valor).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def redondear_tasa(valor: object, decimales: int = 7) -> Decimal:
-    """Redondea una tasa a la cantidad de decimales indicada para su presentacion."""
-
     cuantizador = Decimal("1").scaleb(-decimales)
     return a_decimal(valor).quantize(cuantizador, rounding=ROUND_HALF_UP)

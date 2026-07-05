@@ -1,17 +1,11 @@
-"""Esquemas Pydantic para la entidad Vehiculo."""
-
 from datetime import datetime
 from decimal import Decimal
-
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-
 from app.esquemas.comunes import DecimalNumero, texto_obligatorio
 from app.modelos.enumeraciones import Moneda
 
 
 class VehiculoBase(BaseModel):
-    """Campos editables de una oferta vehicular."""
-
     marca: str = Field(..., min_length=1, max_length=80)
     modelo: str = Field(..., min_length=1, max_length=80)
     version: str | None = Field(default=None, max_length=80)
@@ -29,12 +23,10 @@ class VehiculoBase(BaseModel):
 
 
 class VehiculoCrear(VehiculoBase):
-    """Datos para crear un vehiculo."""
+    """se usa para la creacion del vehiculo, usando lo mismo que la clase VehiculoBase"""
 
 
 class VehiculoActualizar(BaseModel):
-    """Campos opcionales para actualizar parcialmente un vehiculo."""
-
     marca: str | None = Field(default=None, max_length=80)
     modelo: str | None = Field(default=None, max_length=80)
     version: str | None = Field(default=None, max_length=80)
@@ -44,8 +36,6 @@ class VehiculoActualizar(BaseModel):
     moneda: Moneda | None = None
     descripcion: str | None = None
     url_imagen: str | None = Field(default=None, max_length=500)
-    # `activo` no se edita por aqui: la baja logica es exclusiva del endpoint
-    # DELETE, para que la edicion no la pueda esquivar.
 
     @field_validator("marca", "modelo")
     @classmethod
@@ -56,11 +46,8 @@ class VehiculoActualizar(BaseModel):
 
 
 class VehiculoRespuesta(VehiculoBase):
-    """Representacion completa de un vehiculo."""
-
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    activo: bool
     fecha_creacion: datetime
     fecha_actualizacion: datetime

@@ -1,9 +1,6 @@
-"""Orquesta el calculo completo de una simulacion: tasas, cronograma e indicadores."""
-
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
-
 from app.modelos.enumeraciones import Capitalizacion, Moneda, Plan, TipoTasa
 from app.servicios import servicio_tasas, servicio_van_tir
 from app.servicios.calculadora_financiera import (
@@ -21,19 +18,15 @@ from app.utilidades.decimales import (
     redondear_tasa,
 )
 
-
 @dataclass
 class CostoInicial:
-    """Costo o gasto inicial con su modalidad de pago (financiado o al contado)."""
-
     monto: Decimal = CERO
-    # True = se financia (entra al prestamo); False = se paga al contado (efectivo).
+    # si es true se financia y se cuenta en el prestamo pero si es false es que se paga al contado y no se cuenta en el prestamo
     financiado: bool = True
 
 
 @dataclass
 class EntradaSimulacion:
-    """Parametros de entrada validados para calcular una simulacion."""
 
     moneda: Moneda
     precio_vehiculo: Decimal
@@ -42,29 +35,23 @@ class EntradaSimulacion:
     tipo_tasa: TipoTasa
     valor_tasa: Decimal
     capitalizacion: Capitalizacion | None
-    # Meses del credito cuando el plan es personalizado.
     numero_cuotas: int | None = None
-    # Anio para las conversiones de tasas: ordinario (360 dias) o natural (365).
     dias_anio: int = 360
-    # Cuota final. Si es None se usa el porcentaje sugerido por el plan.
+    # cuota final, si el usuario no pone una personalizada se usa la por defecto
     porcentaje_cuota_final: Decimal | None = None
-    # Gracia al inicio: meses de gracia total y, a continuacion, de gracia parcial.
+    # al comienzo los meses de gracia total y luego los de parcial
     meses_gracia_total: int = 0
     meses_gracia_parcial: int = 0
-    # Costos / gastos iniciales (cada uno financiado o al contado).
     costo_notarial: CostoInicial = field(default_factory=CostoInicial)
     costo_registral: CostoInicial = field(default_factory=CostoInicial)
     costo_tasacion: CostoInicial = field(default_factory=CostoInicial)
     comision_estudio: CostoInicial = field(default_factory=CostoInicial)
     comision_activacion: CostoInicial = field(default_factory=CostoInicial)
-    # Costos / gastos periodicos (por cuota).
     gps_periodico: Decimal = CERO
     portes_periodico: Decimal = CERO
     gastos_adm_periodico: Decimal = CERO
-    # Seguros: desgravamen como % mensual y riesgo (todo riesgo) como % anual del precio.
     seguro_desgravamen_mensual: Decimal = CERO
     seguro_riesgo_anual: Decimal = CERO
-    # Costo de oportunidad del dinero del usuario (TEA) para el VAN.
     cok_anual: Decimal = CERO
     tipo_cambio_referencial: Decimal | None = None
     fecha_inicio: date = field(default_factory=date.today)
@@ -81,8 +68,6 @@ class EntradaSimulacion:
 
 @dataclass
 class ResultadoSimulacion:
-    """Indicadores calculados y cronograma de la simulacion (sin redondear)."""
-
     moneda: Moneda
     precio_vehiculo: Decimal
     plan: Plan
@@ -127,8 +112,6 @@ class ResultadoSimulacion:
 
 
 def _validar_entrada(entrada: EntradaSimulacion) -> None:
-    """Valida las reglas de negocio numericas antes de calcular."""
-
     if entrada.precio_vehiculo <= CERO:
         raise ValueError("El precio del vehiculo debe ser mayor que cero.")
     if not (CERO <= entrada.porcentaje_cuota_inicial <= UNO):
