@@ -9,11 +9,8 @@ from app.config import obtener_configuracion
 
 configuracion = obtener_configuracion()
 
-argumentos_conexion = (
-    {"check_same_thread": False}
-    if configuracion.url_base_datos.startswith("sqlite")
-    else {}
-)
+usa_sqlite = configuracion.url_base_datos.startswith("sqlite")
+argumentos_conexion = {"check_same_thread": False} if usa_sqlite else {}
 
 motor = create_engine(
     configuracion.url_base_datos,
@@ -23,7 +20,7 @@ motor = create_engine(
 
 
 # Activa las claves foraneas en SQLite (para el borrado en cascada).
-if configuracion.url_base_datos.startswith("sqlite"):
+if usa_sqlite:
 
     @event.listens_for(motor, "connect")
     def _activar_foreign_keys(conexion, _registro):  # noqa: ANN001
@@ -85,5 +82,6 @@ def crear_tablas() -> None:
 
     from app import modelos  # noqa: F401
 
-    _sincronizar_esquema()
+    if usa_sqlite:
+        _sincronizar_esquema()
     Base.metadata.create_all(bind=motor)
