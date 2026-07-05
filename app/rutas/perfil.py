@@ -1,8 +1,5 @@
-"""Rutas para que el usuario consulte y actualice su propio perfil."""
-
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-
 from app.database import obtener_sesion
 from app.esquemas.usuario import PerfilActualizar, UsuarioRespuesta
 from app.modelos.usuario import Usuario
@@ -15,7 +12,6 @@ enrutador = APIRouter(prefix="/perfil", tags=["Perfil"])
 
 @enrutador.get("", response_model=UsuarioRespuesta, summary="Ver mi perfil")
 def ver_perfil(usuario_actual: Usuario = Depends(obtener_usuario_actual)) -> Usuario:
-    """Devuelve los datos del perfil del usuario autenticado."""
 
     return usuario_actual
 
@@ -26,7 +22,6 @@ def actualizar_perfil(
     sesion: Session = Depends(obtener_sesion),
     usuario_actual: Usuario = Depends(obtener_usuario_actual),
 ) -> Usuario:
-    """Actualiza nombre, apellido, correo o contrasena (requiere la contrasena actual)."""
 
     if datos.correo and datos.correo != usuario_actual.correo:
         existe = (

@@ -1,9 +1,6 @@
-"""Rutas de calculo y gestion de simulaciones (cada usuario ve solo las suyas)."""
-
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
-
 from app.database import obtener_sesion
 from app.esquemas.cronograma import CronogramaFilaRespuesta
 from app.esquemas.simulacion import (
@@ -34,18 +31,16 @@ enrutador = APIRouter(prefix="/simulaciones", tags=["Simulaciones"])
 def _validar_para_crear(
     sesion: Session, solicitud: SimulacionCalcularRequest
 ) -> Vehiculo:
-    """Valida una nueva simulacion: el vehiculo del catalogo existe y esta activo."""
 
     vehiculo = sesion.get(Vehiculo, solicitud.vehiculo_id)
     if vehiculo is None or not vehiculo.activo:
-        raise error_validacion("El vehiculo seleccionado no existe o esta inactivo.")
+        raise error_validacion("El vehiculo seleccionado no existe.")
     return vehiculo
 
 
 def _vehiculo_de_simulacion(
     sesion: Session, solicitud: SimulacionCalcularRequest
 ) -> Vehiculo:
-    """Obtiene el vehiculo para previsualizar, editar o recalcular (no exige que siga activo)."""
 
     vehiculo = sesion.get(Vehiculo, solicitud.vehiculo_id)
     if vehiculo is None:
@@ -54,8 +49,6 @@ def _vehiculo_de_simulacion(
 
 
 def _codigo_siguiente(sesion: Session, usuario: Usuario) -> str:
-    """Correlativo por usuario: la primera simulacion de cada cuenta es la 1."""
-
     existentes = (
         sesion.query(Simulacion).filter(Simulacion.usuario_id == usuario.id).count()
     )
@@ -63,17 +56,17 @@ def _codigo_siguiente(sesion: Session, usuario: Usuario) -> str:
 
 
 def _obtener_simulacion(sesion: Session, simulacion_id: int, usuario: Usuario) -> Simulacion:
-    """Obtiene una simulacion propia o lanza 404 si no existe o no es del usuario."""
-
     simulacion = sesion.get(Simulacion, simulacion_id)
-    if simulacion is None or simulacion.usuario_id != usuario.id:
+    if (
+        simulacion is None
+        or simulacion.usuario_id != usuario.id
+        or simulacion.estado != EstadoSimulacion.CALCULADA
+    ):
         raise error_no_encontrado("La simulacion indicada no existe.")
     return simulacion
 
 
 def _a_detalle(simulacion: Simulacion) -> SimulacionDetalle:
-    """Construye la representacion detallada de una simulacion."""
-
     base = SimulacionRespuesta.model_validate(simulacion).model_dump()
     return SimulacionDetalle(
         **base,
@@ -101,7 +94,6 @@ def _a_listado(simulacion: Simulacion) -> SimulacionListado:
         id=simulacion.id,
         codigo=simulacion.codigo,
         nombre=simulacion.nombre,
-        estado=simulacion.estado,
         moneda=simulacion.moneda,
         plan=simulacion.plan,
         vehiculo_id=simulacion.vehiculo_id,
@@ -169,7 +161,6 @@ def _solicitud_desde_modelo(simulacion: Simulacion) -> SimulacionCalcularRequest
 def listar_simulaciones(
     busqueda: str | None = Query(default=None),
     vehiculo_id: int | None = Query(default=None),
-    estado: EstadoSimulacion | None = Query(default=None),
     sesion: Session = Depends(obtener_sesion),
     usuario_actual: Usuario = Depends(obtener_usuario_actual),
 ) -> list[SimulacionListado]:
@@ -181,12 +172,11 @@ def listar_simulaciones(
     consulta = (
         sesion.query(Simulacion)
         .filter(Simulacion.usuario_id == usuario_actual.id)
+        .filter(Simulacion.estado == EstadoSimulacion.CALCULADA)
         .outerjoin(Vehiculo, Simulacion.vehiculo_id == Vehiculo.id)
     )
     if vehiculo_id is not None:
         consulta = consulta.filter(Simulacion.vehiculo_id == vehiculo_id)
-    if estado is not None:
-        consulta = consulta.filter(Simulacion.estado == estado)
     if busqueda:
         patron = f"%{busqueda}%"
         consulta = consulta.filter(
@@ -245,7 +235,7 @@ def crear_simulacion(
         codigo=_codigo_siguiente(sesion, usuario_actual),
         vehiculo_id=solicitud.vehiculo_id,
         usuario_id=usuario_actual.id,
-        estado=solicitud.estado,
+        estado=EstadoSimulacion.CALCULADA,
     )
     aplicar_resultado_a_modelo(simulacion, solicitud, resultado)
     sesion.add(simulacion)
@@ -302,7 +292,6 @@ def actualizar_simulacion(
         raise error_validacion(str(exc)) from exc
 
     simulacion.vehiculo_id = solicitud.vehiculo_id
-    # Editar no cambia el estado.
     aplicar_resultado_a_modelo(simulacion, solicitud, resultado)
     simulacion.cronograma = construir_filas_cronograma(resultado)
     sesion.commit()
@@ -343,17 +332,17 @@ def recalcular_simulacion(
 @enrutador.delete(
     "/{simulacion_id}",
     response_model=SimulacionDetalle,
-    summary="Archivar una simulacion (baja logica)",
+    summary="Eliminar una simulacion",
 )
-def archivar_simulacion(
+def eliminar_simulacion(
     simulacion_id: int,
     sesion: Session = Depends(obtener_sesion),
     usuario_actual: Usuario = Depends(obtener_usuario_actual),
 ) -> SimulacionDetalle:
-    """Archiva una simulacion propia (baja logica): la marca como ARCHIVADA."""
+    """Elimina una simulacion propia del historial."""
 
     simulacion = _obtener_simulacion(sesion, simulacion_id, usuario_actual)
-    simulacion.estado = EstadoSimulacion.ARCHIVADA
+    detalle = _a_detalle(simulacion)
+    sesion.delete(simulacion)
     sesion.commit()
-    sesion.refresh(simulacion)
-    return _a_detalle(simulacion)
+    return detalle

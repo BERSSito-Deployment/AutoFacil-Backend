@@ -1,8 +1,5 @@
-"""Construye, calcula y persiste simulaciones (mapeo entre request y modelo)."""
-
 from datetime import date
 from decimal import Decimal
-
 from app.esquemas.simulacion import SimulacionCalcularRequest
 from app.modelos.cronograma import CronogramaPago
 from app.modelos.enumeraciones import Moneda
@@ -19,8 +16,6 @@ from app.utilidades.decimales import a_decimal, redondear_moneda, redondear_tasa
 
 
 def convertir_precio(precio, moneda_origen: Moneda, moneda_destino: Moneda, tipo_cambio) -> Decimal:
-    """Convierte el precio del vehiculo a la moneda del credito (1 USD = tipo_cambio PEN)."""
-
     precio = a_decimal(precio)
     if moneda_origen == moneda_destino:
         return precio
@@ -41,8 +36,6 @@ def construir_entrada(
     vehiculo: Vehiculo,
     precio_operacion: object = None,
 ) -> EntradaSimulacion:
-    """Construye la entrada del calculo a partir de la solicitud y el vehiculo."""
-
     if precio_operacion is not None:
         precio = a_decimal(precio_operacion)
     else:
@@ -96,8 +89,6 @@ def calcular_desde_solicitud(
     vehiculo: Vehiculo,
     precio_operacion: object = None,
 ) -> ResultadoSimulacion:
-    """Ejecuta el calculo financiero completo a partir de la solicitud."""
-
     entrada = construir_entrada(solicitud, vehiculo, precio_operacion)
     return calcular_simulacion(entrada)
 
@@ -107,7 +98,6 @@ def aplicar_resultado_a_modelo(
     solicitud: SimulacionCalcularRequest,
     resultado: ResultadoSimulacion,
 ) -> None:
-    """Vuelca los parametros y resultados (redondeados) sobre el modelo ORM."""
 
     simulacion.nombre = (solicitud.nombre or "").strip() or None
     simulacion.moneda = resultado.moneda
@@ -118,7 +108,6 @@ def aplicar_resultado_a_modelo(
     )
     simulacion.fecha_inicio = solicitud.fecha_inicio or date.today()
 
-    # --- Parametros de entrada ---
     simulacion.precio_vehiculo = redondear_moneda(resultado.precio_vehiculo)
     simulacion.plan = resultado.plan
     simulacion.porcentaje_cuota_inicial = redondear_tasa(resultado.porcentaje_cuota_inicial)
@@ -145,7 +134,6 @@ def aplicar_resultado_a_modelo(
     simulacion.seguro_riesgo_anual = redondear_tasa(solicitud.seguro_riesgo_anual)
     simulacion.cok_anual = redondear_tasa(resultado.cok_anual)
 
-    # --- Resultados derivados ---
     simulacion.numero_cuotas = resultado.numero_cuotas
     simulacion.porcentaje_cuota_final = redondear_tasa(resultado.porcentaje_cuota_final)
     simulacion.cuota_inicial = redondear_moneda(resultado.cuota_inicial)

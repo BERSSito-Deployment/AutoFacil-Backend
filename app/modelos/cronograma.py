@@ -1,18 +1,12 @@
-"""Modelo ORM de cada fila del cronograma de pagos de una simulacion."""
-
 from datetime import date
-
 from sqlalchemy import Date, Enum as SqlEnum, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
 from app.database import Base
 from app.modelos.base import TipoMonto
 from app.modelos.enumeraciones import TipoPeriodo
 
 
 class CronogramaPago(Base):
-    """Detalle de un periodo: tramo de la cuota final, tramo regular y flujo del deudor."""
-
     __tablename__ = "cronogramas_pago"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -23,14 +17,14 @@ class CronogramaPago(Base):
     fecha_pago: Mapped[date] = mapped_column(Date, nullable=False)
     tipo_periodo: Mapped[TipoPeriodo] = mapped_column(SqlEnum(TipoPeriodo), nullable=False)
 
-    # Tramo de la cuota final (cuota final diferida).
+    # cuota final
     saldo_inicial_cuota_final: Mapped[float] = mapped_column(TipoMonto, nullable=False, default=0)
     interes_cuota_final: Mapped[float] = mapped_column(TipoMonto, nullable=False, default=0)
     amortizacion_cuota_final: Mapped[float] = mapped_column(TipoMonto, nullable=False, default=0)
     desgravamen_cuota_final: Mapped[float] = mapped_column(TipoMonto, nullable=False, default=0)
     saldo_final_cuota_final: Mapped[float] = mapped_column(TipoMonto, nullable=False, default=0)
 
-    # Tramo de la cuota regular.
+    # cuota regular
     saldo_inicial: Mapped[float] = mapped_column(TipoMonto, nullable=False, default=0)
     interes: Mapped[float] = mapped_column(TipoMonto, nullable=False, default=0)
     cuota: Mapped[float] = mapped_column(TipoMonto, nullable=False, default=0)

@@ -1,16 +1,11 @@
-"""Modelo ORM del vehiculo del catalogo (compartido por todos los usuarios)."""
-
 from sqlalchemy import Boolean, Enum as SqlEnum, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
-
 from app.database import Base
 from app.modelos.base import MarcasTiempoMixin, TipoMonto
 from app.modelos.enumeraciones import Moneda
 
 
 class Vehiculo(Base, MarcasTiempoMixin):
-    """Vehiculo del catalogo comun; cualquier usuario puede simular con el."""
-
     __tablename__ = "vehiculos"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -24,8 +19,5 @@ class Vehiculo(Base, MarcasTiempoMixin):
         SqlEnum(Moneda), nullable=False, default=Moneda.SOLES
     )
     descripcion: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # URL de una imagen del vehiculo (opcional). Si no se indica, el frontend
-    # genera una imagen referencial a partir de la marca.
     url_imagen: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    # Baja logica interna: oculta el vehiculo sin borrar el historial.
     activo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

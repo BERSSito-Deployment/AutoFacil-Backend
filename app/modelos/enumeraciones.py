@@ -1,25 +1,16 @@
-"""Enumeraciones de dominio."""
-
 from enum import Enum
 
-
 class Moneda(str, Enum):
-    """Monedas admitidas para precios y simulaciones."""
-
     SOLES = "PEN"
     DOLARES = "USD"
 
 
 class TipoTasa(str, Enum):
-    """Tipo de tasa de interes ingresada (TNA = nominal, TEA = efectiva)."""
-
     NOMINAL = "NOMINAL"
     EFECTIVA = "EFECTIVA"
 
 
 class Capitalizacion(str, Enum):
-    """Frecuencias con las que capitaliza una tasa nominal (TNA)."""
-
     DIARIA = "DIARIA"
     QUINCENAL = "QUINCENAL"
     MENSUAL = "MENSUAL"
@@ -31,20 +22,11 @@ class Capitalizacion(str, Enum):
 
 
 class Plan(str, Enum):
-    """Plan de pagos del credito.
-
-    Los planes 24 y 36 son los del producto Compra Inteligente (con su numero
-    de cuotas y cuota final sugerida). El plan personalizado deja elegir los
-    meses a mano.
-    """
-
     PLAN_24 = "PLAN_24"
     PLAN_36 = "PLAN_36"
     PERSONALIZADO = "PERSONALIZADO"
 
     def cuotas(self, numero_cuotas_manual: int | None = None) -> int:
-        """Numero de cuotas del plan; el personalizado usa el valor manual."""
-
         if self is Plan.PLAN_24:
             return 24
         if self is Plan.PLAN_36:
@@ -55,16 +37,12 @@ class Plan(str, Enum):
 
     @property
     def cuota_final_sugerida(self) -> str:
-        """Porcentaje de cuota final por defecto (decimal, como texto)."""
-
         if self is Plan.PLAN_24:
             return "0.50"
         return "0.40"
 
 
 class TipoPeriodo(str, Enum):
-    """Clasificacion de cada fila del cronograma de pagos."""
-
     GRACIA_TOTAL = "GRACIA_TOTAL"
     GRACIA_PARCIAL = "GRACIA_PARCIAL"
     CUOTA_ORDINARIA = "CUOTA_ORDINARIA"
@@ -72,7 +50,5 @@ class TipoPeriodo(str, Enum):
 
 
 class EstadoSimulacion(str, Enum):
-    """Estado de una simulacion: vigente (CALCULADA) o archivada (ARCHIVADA)."""
-
     CALCULADA = "CALCULADA"
     ARCHIVADA = "ARCHIVADA"

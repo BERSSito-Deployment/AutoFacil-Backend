@@ -1,10 +1,6 @@
-"""Punto de entrada de la aplicacion FastAPI."""
-
 from contextlib import asynccontextmanager
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
 from app.config import obtener_configuracion
 from app.database import FabricaSesion, crear_tablas
 from app.rutas import (
@@ -17,86 +13,42 @@ from app.rutas import (
 
 configuracion = obtener_configuracion()
 
-# Grupos de endpoints en Swagger.
 ETIQUETAS_OPENAPI = [
     {
         "name": "Autenticacion",
         "description": (
-            "Registro e inicio de sesion del usuario. El login (`/auth/login-json`) y el "
-            "registro (`/auth/registro`) devuelven un token JWT de acceso que debe enviarse "
-            "como `Authorization: Bearer <token>` en el resto de endpoints."
+            "Registro e inicio de sesion del usuario"
         ),
     },
     {
         "name": "Perfil",
         "description": (
-            "Consulta y actualizacion del perfil del propio usuario (nombre, apellido, "
-            "correo y contrasena)."
+            "Consulta y actualizacion del perfil del propio usuario"
         ),
     },
     {
         "name": "Vehiculos",
         "description": (
-            "Catalogo de vehiculos compartido por todos los usuarios: alta, busqueda, "
-            "edicion y baja logica."
+            "Catalogo de vehiculos"
         ),
     },
     {
         "name": "Simulaciones",
         "description": (
-            "Nucleo de AutoFacil: previsualizacion (`/calcular`), guardado, listado con "
-            "filtros, detalle (con el cronograma de la cuota regular y de la cuota final), edicion "
-            "con recalculo, recalculo y archivado (baja logica) de las propuestas de credito "
-            "vehicular Compra Inteligente."
+            "Simulaciones del credito vehicular, con calculo financiero y cronograma de pagos"
         ),
     },
     {
         "name": "Tipo de cambio",
         "description": (
-            "Consulta del tipo de cambio referencial USD/PEN en tiempo real desde una API "
-            "publica (con respaldo local). Es informativo y no altera el calculo financiero."
+            "Consulta del tipo de cambio referencial USD/PEN en tiempo real"
         ),
     },
 ]
 
-DESCRIPCION_API = """
-API del sistema **AutoFacil**: cualquier persona crea una cuenta y simula el
-credito de su auto. El catalogo de vehiculos es compartido; las simulaciones
-son privadas de cada usuario.
-
-### Producto
-
-Producto **Compra Inteligente** (Peru): metodo frances vencido con meses
-comerciales de 30 dias y anio de 360 dias (ordinario) o 365 (natural). El precio
-se reparte en cuota inicial, cuotas mensuales y una **cuota final** que se deja
-para el periodo **N+1**. El plan define las cuotas: Plan 24 (24 cuotas, cuota
-final sugerida 50%), Plan 36 (36 cuotas, sugerida 40%) o personalizado (meses a
-eleccion). La tasa es fija, efectiva o nominal con su capitalizacion. Los
-calculos usan aritmetica decimal de alta precision y no redondean valores
-intermedios.
-
-### Autenticacion
-
-1. Cree una cuenta en `POST /auth/registro` o use la cuenta de prueba
-   (`demo@gmail.com` / `Demo1234`).
-2. Obtenga el token con `POST /auth/login-json` (o el formulario `POST /auth/login`).
-3. Pulse **Authorize** arriba a la derecha y pegue el token para autorizar las
-   llamadas a los endpoints protegidos.
-
-### Convenciones
-
-* Las tasas y porcentajes viajan en **formato decimal**: `0.18` = 18%, `0.20` =
-  20% de cuota inicial.
-* Los importes monetarios se devuelven como numeros (`float`); el frontend aplica
-  el formato de moneda.
-* La baja de vehiculos y simulaciones es **logica** (no hay borrado fisico):
-  `DELETE` desactiva/archiva conservando el historial.
-"""
-
 
 @asynccontextmanager
 async def ciclo_vida(_: FastAPI):
-    """Inicializa la base de datos y los datos semilla al arrancar el servicio."""
 
     crear_tablas()
     from app.datos_semilla import sembrar_datos
@@ -111,7 +63,6 @@ async def ciclo_vida(_: FastAPI):
 
 aplicacion = FastAPI(
     title="AutoFacil API",
-    description=DESCRIPCION_API,
     version=configuracion.version_aplicacion,
     openapi_tags=ETIQUETAS_OPENAPI,
     swagger_ui_parameters={"persistAuthorization": True},
@@ -135,7 +86,6 @@ aplicacion.include_router(tipo_cambio.enrutador)
 
 @aplicacion.get("/", tags=["Estado"], summary="Estado del servicio")
 def estado_servicio() -> dict:
-    """Endpoint de verificacion del estado del servicio."""
 
     return {
         "aplicacion": configuracion.nombre_aplicacion,
@@ -144,5 +94,4 @@ def estado_servicio() -> dict:
     }
 
 
-# Alias ASGI estandar para uvicorn (app.main:app).
 app = aplicacion

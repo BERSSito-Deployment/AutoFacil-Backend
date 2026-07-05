@@ -1,27 +1,21 @@
-"""Esquemas Pydantic para las filas del cronograma de pagos."""
-
 from datetime import date
-
 from pydantic import BaseModel, ConfigDict
-
 from app.modelos.enumeraciones import TipoPeriodo
 
 
 class CronogramaFilaRespuesta(BaseModel):
-    """Detalle de un periodo del cronograma (cuota final, cuota regular y flujo)."""
-
     model_config = ConfigDict(from_attributes=True)
 
     numero_periodo: int
     fecha_pago: date
     tipo_periodo: TipoPeriodo
-    # Tramo de la cuota final.
+    # para cuota final
     saldo_inicial_cuota_final: float
     interes_cuota_final: float
     amortizacion_cuota_final: float
     desgravamen_cuota_final: float
     saldo_final_cuota_final: float
-    # Tramo regular.
+    # el tramo regular
     saldo_inicial: float
     interes: float
     cuota: float

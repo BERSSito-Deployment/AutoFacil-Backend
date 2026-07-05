@@ -1,8 +1,5 @@
-"""Pruebas del cronograma de pagos (cuota regular + cuota final diferida)."""
-
 from datetime import date
 from decimal import Decimal
-
 from app.modelos.enumeraciones import TipoPeriodo
 from app.servicios.calculadora_financiera import (
     ParametrosCronograma,
@@ -19,8 +16,6 @@ def _parametros(
     seguro_desgravamen_mensual: Decimal = Decimal("0"),
     cuota_final: Decimal = Decimal("4000"),
 ) -> ParametrosCronograma:
-    """Construye parametros de cronograma para los escenarios de prueba."""
-
     return ParametrosCronograma(
         monto_prestamo=Decimal("10000"),
         cuota_final=cuota_final,
@@ -38,8 +33,6 @@ def _parametros(
 
 
 def test_cuota_francesa_amortiza_hasta_cero():
-    """Aplicando la cuota constante, el saldo debe llegar a cero en n periodos."""
-
     saldo_base = Decimal("10000")
     tasa = Decimal("0.01")
     n = 12
@@ -54,47 +47,34 @@ def test_cuota_francesa_amortiza_hasta_cero():
 
 
 def test_cuota_francesa_tasa_cero():
-    """Con tasa cero la cuota es el saldo repartido en partes iguales."""
-
     cuota = calcular_cuota_francesa(Decimal("12000"), Decimal("0"), 12)
     assert cuota == Decimal("1000")
 
 
 def test_cronograma_tiene_un_periodo_extra_para_la_cuota_final():
-    """El cronograma tiene N+1 filas: las N cuotas y la cuota final en el periodo N+1."""
-
     resultado = generar_cronograma(_parametros())
-    assert len(resultado.filas) == 13  # 12 cuotas + cuota final
+    assert len(resultado.filas) == 13  
     assert resultado.filas[-1].numero_periodo == 13
     assert resultado.filas[-1].tipo_periodo == TipoPeriodo.CUOTA_FINAL
-    # El saldo regular cierra en cero en la ultima cuota (N) y la cuota final en N+1.
     assert abs(resultado.filas[11].saldo_final) < TOLERANCIA
     assert abs(resultado.filas[-1].saldo_final_cuota_final) < TOLERANCIA
 
 
 def test_cuota_final_se_paga_integro_en_el_periodo_final():
-    """En el periodo N+1 se paga completa la cuota final."""
-
     resultado = generar_cronograma(_parametros(cuota_final=Decimal("4000")))
     ultima = resultado.filas[-1]
     assert abs(ultima.amortizacion_cuota_final - Decimal("4000")) < TOLERANCIA
-    # Las cuotas regulares no amortizan la cuota final (solo el saldo financiado).
     assert all(f.amortizacion_cuota_final == Decimal("0") for f in resultado.filas[:-1])
 
 
 def test_saldo_financiado_excluye_el_valor_presente_de_la_cuota_final():
-    """El tramo regular amortiza solo el saldo (prestamo menos VP de la cuota final)."""
-
     resultado = generar_cronograma(_parametros(cuota_final=Decimal("4000")))
-    # VP de la cuota final = 4000 / 1.01^13 ; saldo = 10000 - VP.
     vp = Decimal("4000") / (Decimal("1.01") ** 13)
     assert abs(resultado.saldo_financiado - (Decimal("10000") - vp)) < TOLERANCIA
     assert abs(resultado.filas[0].saldo_inicial - resultado.saldo_financiado) < TOLERANCIA
 
 
 def test_cronograma_gracia_total_capitaliza_intereses():
-    """En la gracia total no hay pago y los intereses se capitalizan al saldo."""
-
     resultado = generar_cronograma(_parametros(meses_gracia_total=3))
     for fila in resultado.filas[:3]:
         assert fila.tipo_periodo == TipoPeriodo.GRACIA_TOTAL
@@ -105,8 +85,6 @@ def test_cronograma_gracia_total_capitaliza_intereses():
 
 
 def test_cronograma_gracia_parcial_paga_solo_interes():
-    """En la gracia parcial solo se paga el interes y el saldo no varia."""
-
     resultado = generar_cronograma(_parametros(meses_gracia_parcial=2))
     for fila in resultado.filas[:2]:
         assert fila.tipo_periodo == TipoPeriodo.GRACIA_PARCIAL

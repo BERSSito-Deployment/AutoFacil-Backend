@@ -1,29 +1,26 @@
-"""Pruebas de API con una base de datos aislada.
-
-Usa un motor SQLite temporal y sobreescribe la dependencia de sesion para no
-tocar la base de datos de desarrollo. Cubre autenticacion por correo, catalogo
-compartido, simulaciones aisladas por usuario, validaciones de negocio, tipo de
-cambio y el credito Compra Inteligente.
-"""
-
 import os
 import tempfile
-
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-
 from app.database import Base, obtener_sesion
-from app.main import app
 from app.modelos.enumeraciones import Moneda
 from app.modelos.usuario import Usuario
 from app.modelos.vehiculo import Vehiculo
+from app.rutas import auth, perfil, simulaciones, tipo_cambio, vehiculos
 from app.seguridad.hash import hashear_password
 
 _RUTA = os.path.join(tempfile.gettempdir(), "_autofacil_pytest_api.db")
 _motor = create_engine(f"sqlite:///{_RUTA}", connect_args={"check_same_thread": False})
 SesionPrueba = sessionmaker(bind=_motor, autoflush=False, autocommit=False)
+app = FastAPI()
+app.include_router(auth.enrutador)
+app.include_router(perfil.enrutador)
+app.include_router(vehiculos.enrutador)
+app.include_router(simulaciones.enrutador)
+app.include_router(tipo_cambio.enrutador)
 
 
 def _sesion_override():
@@ -49,18 +46,16 @@ def preparar_datos():
         [
             Usuario(
                 nombre="Usuario", apellido="Uno", correo="usuario1@autofacil.local",
-                password_hash=hashear_password("Clave123"), activo=True,
+                password_hash=hashear_password("Clave123"),
             ),
             Usuario(
                 nombre="Usuario", apellido="Dos", correo="usuario2@autofacil.local",
-                password_hash=hashear_password("Clave456"), activo=True,
+                password_hash=hashear_password("Clave456"),
             ),
             Vehiculo(marca="Toyota", modelo="Yaris", anio=2026,
-                     precio=80000, moneda=Moneda.SOLES, activo=True),
+                     precio=80000, moneda=Moneda.SOLES),
             Vehiculo(marca="Hyundai", modelo="Tucson", anio=2026,
-                     precio=35000, moneda=Moneda.DOLARES, activo=True),
-            Vehiculo(marca="Kia", modelo="Rio", anio=2024,
-                     precio=60000, moneda=Moneda.SOLES, activo=False),
+                     precio=35000, moneda=Moneda.DOLARES),
         ]
     )
     sesion.commit()
@@ -88,12 +83,12 @@ def _headers2() -> dict:
 
 def _ids():
     h = _headers()
-    veh = cliente.get("/vehiculos", params={"incluir_inactivos": True}, headers=h).json()
+    veh = cliente.get("/vehiculos", headers=h).json()
     return h, veh
 
 
 def _veh_pen(veh):
-    return next(v for v in veh if v["moneda"] == "PEN" and v["activo"])
+    return next(v for v in veh if v["moneda"] == "PEN")
 
 
 def _solicitud_base(vehiculo_id, moneda="PEN", **extra):
@@ -109,14 +104,25 @@ def _solicitud_base(vehiculo_id, moneda="PEN", **extra):
 def _crear_sim(h, veh, **extra):
     return cliente.post(
         "/simulaciones",
-        json={**_solicitud_base(_veh_pen(veh)["id"], **extra), "estado": "CALCULADA"},
+        json=_solicitud_base(_veh_pen(veh)["id"], **extra),
         headers=h,
     )
 
 
-def test_moneda_incompatible_rechazada():
-    """Un credito PEN sobre un vehiculo USD debe rechazarse."""
+def test_moneda_distinta_convierte_precio():
+    h, veh = _ids()
+    veh_usd = next(v for v in veh if v["moneda"] == "USD")
+    r = cliente.post(
+        "/simulaciones/calcular",
+        json=_solicitud_base(veh_usd["id"], moneda="PEN", tipo_cambio_referencial=3.75),
+        headers=h,
+    )
+    assert r.status_code == 200
+    assert r.json()["moneda"] == "PEN"
+    assert r.json()["precio_vehiculo"] == pytest.approx(veh_usd["precio"] * 3.75, abs=0.01)
 
+
+def test_moneda_distinta_sin_tipo_cambio_rechazada():
     h, veh = _ids()
     veh_usd = next(v for v in veh if v["moneda"] == "USD")
     r = cliente.post(
@@ -125,29 +131,29 @@ def test_moneda_incompatible_rechazada():
         headers=h,
     )
     assert r.status_code == 400
-    assert "moneda" in r.json()["detail"].lower()
+    assert "tipo de cambio" in r.json()["detail"].lower()
 
 
-def test_crear_con_vehiculo_inactivo_rechazado():
-    """No se puede GUARDAR una nueva simulacion con un vehiculo dado de baja."""
-
+def test_crear_con_vehiculo_quitado_rechazado():
     h, veh = _ids()
-    inactivo = next(v for v in veh if not v["activo"])
+    creado = cliente.post(
+        "/vehiculos",
+        json={"marca": "Kia", "modelo": "Rio", "anio": 2024, "precio": 60000, "moneda": "PEN"},
+        headers=h,
+    ).json()
+    cliente.delete(f"/vehiculos/{creado['id']}", headers=h)
     r = cliente.post(
         "/simulaciones",
-        json={**_solicitud_base(inactivo["id"]), "estado": "CALCULADA"},
+        json=_solicitud_base(creado["id"]),
         headers=h,
     )
     assert r.status_code == 400
 
 
-def test_cualquier_vehiculo_activo_se_puede_simular():
-    """Todo vehiculo activo del usuario se puede simular."""
-
+def test_cualquier_vehiculo_visible_se_puede_simular():
     h, veh = _ids()
-    activos = [v for v in veh if v["activo"]]
-    assert activos, "Deberia haber vehiculos activos para simular."
-    for objetivo in activos:
+    assert veh, "Deberia haber vehiculos disponibles para simular."
+    for objetivo in veh:
         r = cliente.post(
             "/simulaciones/calcular",
             json=_solicitud_base(objetivo["id"], moneda=objetivo["moneda"], tipo_cambio_referencial=3.8),
@@ -157,8 +163,6 @@ def test_cualquier_vehiculo_activo_se_puede_simular():
 
 
 def test_planes_difieren_la_cuota_final_y_cierran_en_cero():
-    """Ambos planes dejan la cuota final para el periodo N+1."""
-
     h, veh = _ids()
     veh_pen = _veh_pen(veh)["id"]
 
@@ -173,10 +177,10 @@ def test_planes_difieren_la_cuota_final_y_cierran_en_cero():
         headers=h,
     ).json()
 
-    # La cuota final sugerida es 40% (Plan 36) y 50% (Plan 24) del precio.
+    # la cuota final predeterminada es 40% (Plan 36) y 50% (Plan 24) del precio
     assert plan36["porcentaje_cuota_final"] == 0.40
     assert plan24["porcentaje_cuota_final"] == 0.50
-    # El cronograma tiene N+1 filas y la cuota final se paga en la ultima.
+    # el cronograma tiene n filas y la cuota final se paga en la ultima.
     assert len(plan36["cronograma"]) == 37 and len(plan24["cronograma"]) == 25
     for res in (plan36, plan24):
         ultima = res["cronograma"][-1]
@@ -187,8 +191,6 @@ def test_planes_difieren_la_cuota_final_y_cierran_en_cero():
 
 
 def test_simulacion_valida_saldo_cero_e_indicadores():
-    """Una simulacion valida termina en saldo cero y trae VAN, TIR y TCEA."""
-
     h, veh = _ids()
     r = _crear_sim(h, veh)
     assert r.status_code == 201
@@ -199,34 +201,28 @@ def test_simulacion_valida_saldo_cero_e_indicadores():
 
 
 def test_catalogo_compartido_y_simulaciones_aisladas():
-    """El catalogo es el mismo para todos; las simulaciones son de cada usuario."""
+    # el catalogo es el mismo para todos pero las simulaciones son para cada usuario"""
 
     h1, veh = _ids()
-    # Ambos usuarios ven el mismo catalogo.
-    veh2 = cliente.get(
-        "/vehiculos", params={"incluir_inactivos": True}, headers=_headers2()
-    ).json()
+    # ambos ven el mismo catalogo
+    veh2 = cliente.get("/vehiculos", headers=_headers2()).json()
     assert {v["id"] for v in veh} == {v["id"] for v in veh2}
 
-    # El usuario 1 crea una simulacion.
+    # el usuario 1 crea una simulacion
     sim = _crear_sim(h1, veh).json()
 
-    # El usuario 2 no la ve en su historial ni puede abrirla.
+    # el usuario 2 no la ve en su historial ni puede abrirla
     h2 = _headers2()
     lista2 = cliente.get("/simulaciones", headers=h2).json()
     assert all(s["id"] != sim["id"] for s in lista2)
     assert cliente.get(f"/simulaciones/{sim['id']}", headers=h2).status_code == 404
-    # Ni archivarla.
     assert cliente.delete(f"/simulaciones/{sim['id']}", headers=h2).status_code == 404
-    # El propio dueno si puede archivarla (baja logica).
-    archivada = cliente.delete(f"/simulaciones/{sim['id']}", headers=h1)
-    assert archivada.status_code == 200
-    assert archivada.json()["estado"] == "ARCHIVADA"
+    eliminada = cliente.delete(f"/simulaciones/{sim['id']}", headers=h1)
+    assert eliminada.status_code == 200
+    assert cliente.get(f"/simulaciones/{sim['id']}", headers=h1).status_code == 404
 
 
 def test_busqueda_historial_por_vehiculo():
-    """La busqueda del historial encuentra por nombre del vehiculo."""
-
     h, veh = _ids()
     _crear_sim(h, veh)
     por_vehiculo = cliente.get("/simulaciones", params={"busqueda": "Toyota"}, headers=h).json()
@@ -234,8 +230,6 @@ def test_busqueda_historial_por_vehiculo():
 
 
 def test_listado_muestra_pago_mensual_total():
-    """El historial muestra lo que se paga al mes, no solo la cuota pura."""
-
     h, veh = _ids()
     sim = _crear_sim(
         h,
@@ -260,8 +254,6 @@ def test_listado_muestra_pago_mensual_total():
 
 
 def test_registro_correo_obligatorio_y_normalizado():
-    """El registro rechaza correo vacio y normaliza el correo a minusculas."""
-
     vacio = cliente.post(
         "/auth/registro",
         json={"nombre": "A", "apellido": "B", "correo": "  ", "password": "Clave123"},
@@ -280,8 +272,6 @@ def test_registro_correo_obligatorio_y_normalizado():
 
 
 def test_password_excede_72_bytes():
-    """Una contrasena de mas de 72 bytes se rechaza con un error claro."""
-
     r = cliente.post(
         "/auth/registro",
         json={"nombre": "L", "apellido": "P", "correo": "larga@mail.com",
@@ -291,16 +281,12 @@ def test_password_excede_72_bytes():
 
 
 def test_tipo_cambio_par_invalido():
-    """Un par de monedas no soportado devuelve 400 (no una tasa enganosa)."""
-
     h = _headers()
     r = cliente.get("/tipo-cambio", params={"base": "EUR", "destino": "PEN"}, headers=h)
     assert r.status_code == 400
 
 
 def test_tipo_cambio_en_tiempo_real():
-    """El endpoint de tipo de cambio devuelve una tasa positiva (con respaldo)."""
-
     h = _headers()
     r = cliente.get("/tipo-cambio", params={"base": "USD", "destino": "PEN"}, headers=h)
     assert r.status_code == 200
@@ -308,19 +294,25 @@ def test_tipo_cambio_en_tiempo_real():
     assert cliente.get("/tipo-cambio").status_code == 401
 
 
-def test_put_vehiculo_no_puede_desactivar():
-    """La edicion de un vehiculo no puede cambiar `activo` (baja solo via DELETE)."""
-
+def test_quitar_vehiculo_lo_oculta_del_catalogo():
     h, veh = _ids()
-    objetivo = _veh_pen(veh)
-    r = cliente.put(
-        f"/vehiculos/{objetivo['id']}",
-        json={"activo": False, "precio": objetivo["precio"]},
+    creado = cliente.post(
+        "/vehiculos",
+        json={
+            "marca": "Nissan",
+            "modelo": "Versa",
+            "anio": 2026,
+            "precio": 72000,
+            "moneda": "PEN",
+        },
         headers=h,
     )
-    assert r.status_code == 200
-    actual = cliente.get(f"/vehiculos/{objetivo['id']}", headers=h).json()
-    assert actual["activo"] is True
+    assert creado.status_code == 201
+    vehiculo_id = creado.json()["id"]
+    quitado = cliente.delete(f"/vehiculos/{vehiculo_id}", headers=h)
+    assert quitado.status_code == 200
+    catalogo = cliente.get("/vehiculos", headers=h).json()
+    assert all(item["id"] != vehiculo_id for item in catalogo)
 
 
 def test_perfil_password_larga_rechazada():
@@ -330,20 +322,16 @@ def test_perfil_password_larga_rechazada():
 
 
 def test_perfil_cambio_de_contrasena_funciona():
-    """Cambiar la contrasena exige la actual y permite entrar con la nueva."""
-
     reg = cliente.post(
         "/auth/registro",
         json={"nombre": "Pa", "apellido": "Pe", "correo": "pa@mail.com", "password": "Clave123"},
     )
     assert reg.status_code == 200
     h = {"Authorization": f"Bearer {reg.json()['access_token']}"}
-    # Sin la contrasena actual correcta se rechaza.
     mal = cliente.put(
         "/perfil", json={"password_actual": "Incorrecta", "password_nueva": "Nueva1234"}, headers=h
     )
     assert mal.status_code == 400
-    # Con la actual correcta, se cambia y el login funciona con la nueva.
     ok = cliente.put(
         "/perfil", json={"password_actual": "Clave123", "password_nueva": "Nueva1234"}, headers=h
     )
@@ -357,8 +345,6 @@ def test_perfil_cambio_de_contrasena_funciona():
 
 
 def test_primera_simulacion_de_cada_usuario_es_la_numero_uno():
-    """El codigo es correlativo por usuario: la primera siempre es SIM-000001."""
-
     reg = cliente.post(
         "/auth/registro",
         json={"nombre": "Nu", "apellido": "Evo", "correo": "nuevo@mail.com", "password": "Clave123"},
@@ -367,7 +353,7 @@ def test_primera_simulacion_de_cada_usuario_es_la_numero_uno():
     veh = cliente.get("/vehiculos", headers=h).json()
     r = cliente.post(
         "/simulaciones",
-        json={**_solicitud_base(_veh_pen(veh)["id"]), "estado": "CALCULADA"},
+        json=_solicitud_base(_veh_pen(veh)["id"]),
         headers=h,
     )
     assert r.status_code == 201
@@ -375,8 +361,6 @@ def test_primera_simulacion_de_cada_usuario_es_la_numero_uno():
 
 
 def test_recalcular_reproduce_resultado():
-    """Recalcular una simulacion guardada reproduce los mismos indicadores."""
-
     h, veh = _ids()
     sim = _crear_sim(h, veh).json()
     re = cliente.post(f"/simulaciones/{sim['id']}/recalcular", headers=h).json()
@@ -386,27 +370,19 @@ def test_recalcular_reproduce_resultado():
         assert abs(re["tcea"] - sim["tcea"]) < 1e-6
 
 
-def test_editar_simulacion_archivada_no_cambia_estado():
-    """Se puede editar una simulacion archivada y su estado no cambia al editar."""
-
+def test_eliminar_simulacion_la_quita_del_historial():
     h, veh = _ids()
     sim = _crear_sim(h, veh).json()
-    # Se archiva (baja logica) y luego se edita: el estado debe seguir ARCHIVADA.
-    cliente.delete(f"/simulaciones/{sim['id']}", headers=h)
-    editada = cliente.put(
-        f"/simulaciones/{sim['id']}",
-        json={**_solicitud_base(_veh_pen(veh)["id"], plan="PLAN_24"), "estado": "CALCULADA"},
-        headers=h,
-    ).json()
-    assert editada["estado"] == "ARCHIVADA"
-    assert editada["numero_cuotas"] == 24
+    eliminado = cliente.delete(f"/simulaciones/{sim['id']}", headers=h)
+    assert eliminado.status_code == 200
+    historial = cliente.get("/simulaciones", headers=h).json()
+    assert all(item["id"] != sim["id"] for item in historial)
+    assert cliente.get(f"/simulaciones/{sim['id']}", headers=h).status_code == 404
 
 
 def test_editar_cambiando_moneda_convierte_precio_conservado():
-    """Al editar cambiando la moneda (sin actualizar precio) el precio se convierte."""
-
     h, veh = _ids()
-    sim = _crear_sim(h, veh).json()  # creada en Soles
+    sim = _crear_sim(h, veh).json() 
     precio_pen = sim["precio_vehiculo"]
     editada = cliente.put(
         f"/simulaciones/{sim['id']}",
@@ -414,16 +390,11 @@ def test_editar_cambiando_moneda_convierte_precio_conservado():
         headers=h,
     ).json()
     assert editada["moneda"] == "USD"
-    # El precio conservado se convirtio de Soles a Dolares (precio_pen / 4.0).
     assert abs(editada["precio_vehiculo"] - precio_pen / 4.0) < 0.01
 
 
 def test_cuota_final_mayor_que_saldo_rechazada():
-    """Si la cuota inicial es tan alta que no queda saldo, se rechaza."""
-
     h, veh = _ids()
-    # Cuota inicial 99%: el prestamo queda en 1% del precio, menor que la cuota final
-    # (40% del precio en Plan 36): no queda saldo para las cuotas mensuales.
     r = cliente.post(
         "/simulaciones/calcular",
         json=_solicitud_base(_veh_pen(veh)["id"], porcentaje_cuota_inicial=0.99),
